@@ -66,6 +66,7 @@ class CardInfo:
             "status": self.status,
             "group": self.group if self.status == "ok" else "X",
             "colors": self.colors,
+            "color_identity": self.color_identity,
             "type_line": self.type_line,
             "mana_cost": self.mana_cost,
             "cmc": self.cmc,

@@ -70,6 +70,53 @@
     return row;
   }
 
+  // ------------------------------------------------------- colour tally
+  // How much of each colour a card represents when the pod takes it:
+  // mono-coloured 1 to its colour; multicolour ½ per colour; lands ½ per
+  // colour of their identity; anything with no colours counts as colourless.
+  function colorShares(name) {
+    const i = info(name);
+    if (!i || i.status !== "ok") return { "?": 1 };
+    const cols = i.group === "L" ? (i.color_identity || []) : (i.colors || []);
+    if (!cols.length) return { C: 1 };
+    if (cols.length === 1) return { [cols[0]]: 1 };
+    const out = {};
+    for (const c of cols) out[c] = 0.5;
+    return out;
+  }
+  const TALLY_ORDER = ["W", "U", "B", "R", "G", "C"];
+  const TALLY_LABEL = { W: "W", U: "U", B: "B", R: "R", G: "G", C: "C" };
+  function fmt(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
+
+  function renderTaken(st) {
+    const box = $("taken");
+    clear(box);
+    const tally = {};
+    let total = 0;
+    for (const w of st.wheels) {
+      for (const n of w.taken) {
+        total += 1;
+        for (const [c, v] of Object.entries(colorShares(n))) tally[c] = (tally[c] || 0) + v;
+      }
+    }
+    if (!total) return;
+    box.appendChild(el("span", "lbl", "pod took"));
+    for (const c of TALLY_ORDER) {
+      const cell = el("span", `cell g-${c}`);
+      cell.appendChild(el("small", null, TALLY_LABEL[c]));
+      cell.appendChild(document.createTextNode(fmt(tally[c] || 0)));
+      box.appendChild(cell);
+    }
+    if (tally["?"]) {
+      const cell = el("span", "cell g-X");
+      cell.appendChild(el("small", null, "?"));
+      cell.appendChild(document.createTextNode(fmt(tally["?"])));
+      cell.title = "cards without Scryfall data yet";
+      box.appendChild(cell);
+    }
+    box.appendChild(el("span", "total", `${total} cards seen taken`));
+  }
+
   // -------------------------------------------------------------- header
   function renderHeader(st) {
     const d = st.draft;
@@ -153,8 +200,12 @@
       const b = el("div", "block");
       const head = el("div", "head");
       head.appendChild(el("span", "pos", pos(f.pack, f.first_pick)));
+      // N-1 other drafters each take one before it returns
+      const n = st.draft ? st.draft.pod_size : 0;
+      const returning = Math.max(0, f.passed.length - (n - 1));
       head.appendChild(el("span", "due",
-        `back at ${pos(f.pack, f.due_pick)} · in ${f.picks_until_return} pick${f.picks_until_return === 1 ? "" : "s"}`));
+        `back at ${pos(f.pack, f.due_pick)} · in ${f.picks_until_return} pick${f.picks_until_return === 1 ? "" : "s"}`
+        + ` · ${returning} card${returning === 1 ? "" : "s"} will return`));
       b.appendChild(head);
       const row = el("div", "tilerow");
       row.appendChild(tile(f.your_pick, "sm", "mine", "your pick"));
@@ -176,7 +227,6 @@
       const b = el("div", "block");
       const head = el("div", "head");
       head.appendChild(el("span", "pos", `${pos(w.pack, w.first_pick)} → ${pos(w.pack, w.return_pick)}`));
-      head.appendChild(el("span", "muted", `pod took ${w.taken.length} · ${w.returned.length} came back`));
       b.appendChild(head);
       // one wrapping row: your pick (gold), then the pack you passed in its
       // original order, with a red X over every card that did not come back
@@ -233,6 +283,7 @@
   function render(st) {
     cards = st.cards || {};
     renderHeader(st);
+    renderTaken(st);
     renderCurrent(st);
     renderInFlight(st);
     renderWheels(st);

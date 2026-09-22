@@ -170,8 +170,8 @@ def test_cards_resolve_and_images_served(tmp_path):
         assert mom["group"] == "W" and mom["image"] == "/img/id-mom.jpg"
         assert st["cards"]["Mana Vault"]["group"] == "C"
         assert st["cards"]["Dark Ritual"] == {
-            "status": "missing", "group": "X", "colors": [], "type_line": "",
-            "mana_cost": "", "cmc": 0.0, "image": None,
+            "status": "missing", "group": "X", "colors": [], "color_identity": [],
+            "type_line": "", "mana_cost": "", "cmc": 0.0, "image": None,
         }
         # every name in the draft so far was looked up exactly once, in batches
         names = {c for p in st["picks"] for c in p["available"]}
