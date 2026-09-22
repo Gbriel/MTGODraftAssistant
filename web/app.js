@@ -66,8 +66,8 @@
   // "Your previous pick: <card>", set apart from the rest of the row
   function prevPick(name) {
     const box = el("div", "prev");
-    box.appendChild(el("div", "prev-label", "Your previous pick:"));
     box.appendChild(tile(name, "sm", "mine", "your pick from this pack"));
+    box.appendChild(el("div", "prev-label", "Your previous pick"));
     return box;
   }
   // [previous pick] | [the pack's cards, wrapping in their own space]
