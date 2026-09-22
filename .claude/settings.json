@@ -39,6 +39,9 @@
       "Bash(git checkout:*)",
       "Bash(git restore:*)",
       "Bash(git init:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(git ls-remote:*)",
 
       "Read(//c/Users/kopit/MTGODraftLogs/**)",
       "Read(//c/Users/kopit/AppData/Local/Apps/2.0/**)",
@@ -53,7 +56,8 @@
 
     "deny": [
       "Bash(rm -rf:*)",
-      "Bash(git push:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
       "Bash(git reset --hard:*)",
       "Bash(del /s:*)",
 
