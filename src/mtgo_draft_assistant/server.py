@@ -10,6 +10,8 @@ a framework wouldn't earn its place here.
     GET /api/state   -> current state as JSON
     GET /events      -> text/event-stream; one ``state`` event per change
     GET /img/<f>     -> cached Scryfall small image
+    POST /api/config -> {"log_dir": "..."} switches the watched directory and
+                        saves it to config.toml
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import threading
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
 from http import HTTPStatus
@@ -25,8 +28,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
+from .config import save_log_dir
 from .scryfall import CardInfo, CardResolver
-from .watcher import DraftWatcher, Update
+from .watcher import DraftWatcher, Update, newest_log
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 SSE_KEEPALIVE_SECONDS = 15.0
@@ -46,7 +50,7 @@ def draft_card_names(update: Update) -> list[str]:
 
 
 def build_state(update: Update | None, analysis: Analysis | None,
-                log_dir: Path, version: int,
+                log_dir: Path | None, version: int,
                 cards: dict[str, CardInfo] | None = None,
                 cards_pending: int = 0,
                 card_errors: list[str] | None = None) -> dict:
@@ -54,7 +58,8 @@ def build_state(update: Update | None, analysis: Analysis | None,
     base = {
         "version": version,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
-        "log_dir": str(log_dir),
+        "log_dir": str(log_dir) if log_dir is not None else None,
+        "log_dir_ok": bool(log_dir is not None and log_dir.is_dir()),
         "file": None,
         "draft": None,
         "position": {"pack": None, "pick": None, "status": "idle"},
@@ -174,6 +179,25 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._error(HTTPStatus.NOT_FOUND, "not found")
 
+    def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        if path != "/api/config":
+            self._error(HTTPStatus.NOT_FOUND, "not found")
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(payload, dict):
+                raise ValueError("body must be a JSON object")
+        except (ValueError, json.JSONDecodeError) as e:
+            self._json({"ok": False, "error": f"bad request: {e}"}, HTTPStatus.BAD_REQUEST)
+            return
+        if self.server.on_config is None:
+            self._json({"ok": False, "error": "configuration is read-only"}, HTTPStatus.FORBIDDEN)
+            return
+        result = self.server.on_config(payload)
+        self._json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
+
     # responses
     def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
         self.send_response(status)
@@ -186,9 +210,9 @@ class Handler(BaseHTTPRequestHandler):
     def _error(self, status: HTTPStatus, message: str) -> None:
         self._send(status, message.encode("utf-8"), "text/plain; charset=utf-8")
 
-    def _json(self, obj: dict) -> None:
+    def _json(self, obj: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-        self._send(HTTPStatus.OK, body, "application/json; charset=utf-8")
+        self._send(status, body, "application/json; charset=utf-8")
 
     def _file(self, path: Path) -> None:
         try:
@@ -262,11 +286,13 @@ class DraftHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
     def __init__(self, address: tuple[str, int], store: StateStore, verbose: bool = False,
-                 image_dir: Path | None = None) -> None:
+                 image_dir: Path | None = None,
+                 on_config: Callable[[dict], dict] | None = None) -> None:
         super().__init__(address, Handler)
         self.store = store
         self.verbose = verbose
         self.image_dir = image_dir
+        self.on_config = on_config
 
 
 # -- orchestration -----------------------------------------------------------
@@ -279,12 +305,15 @@ class DraftServer:
     Pass ``resolver=None`` for a text-only server (tests, offline use).
     """
 
-    def __init__(self, log_dir: str | Path, host: str = "127.0.0.1", port: int = 8765,
+    def __init__(self, log_dir: str | Path | None, host: str = "127.0.0.1", port: int = 8765,
                  interval: float = 0.5, verbose: bool = False,
-                 resolver: CardResolver | None = None) -> None:
-        self.log_dir = Path(log_dir)
+                 resolver: CardResolver | None = None,
+                 config_path: Path | None = None,
+                 allow_config: bool = True) -> None:
+        self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.resolver = resolver
+        self.config_path = config_path          # None -> default config.toml location
         if resolver is not None:
             resolver.on_change = self._on_cards_changed
         self.store = StateStore(build_state(None, None, self.log_dir, 0))
@@ -292,6 +321,7 @@ class DraftServer:
         self.httpd = DraftHTTPServer(
             (host, port), self.store, verbose=verbose,
             image_dir=resolver.image_dir if resolver else None,
+            on_config=self._on_config if allow_config else None,
         )
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -326,11 +356,56 @@ class DraftServer:
             cards=cards, cards_pending=pending, card_errors=errors,
         ))
 
+    def _publish_idle(self) -> None:
+        with self._last_lock:
+            self._last = None
+        self.store.set(build_state(None, None, self.log_dir, self.store.version + 1))
+
     def _on_update(self, update: Update) -> None:
         analysis = analyse(update.draft)
         with self._last_lock:
             self._last = (update, analysis)
         self._publish(update, analysis)
+
+    # -- configuration from the UI
+    def set_log_dir(self, value: str) -> dict:
+        """Switch the watched directory, persist it, and re-publish state."""
+        raw = (value or "").strip().strip('"')
+        if not raw:
+            return {"ok": False, "error": "enter a directory path"}
+        path = Path(raw).expanduser()
+        if not path.is_dir():
+            return {"ok": False, "error": f"not a directory: {path}"}
+        self.log_dir = path
+        self.watcher.set_log_dir(path)
+        try:
+            saved = save_log_dir(path, self.config_path)
+        except OSError as e:
+            saved = None
+            save_error = str(e)
+        else:
+            save_error = None
+        first = self.watcher.poll()
+        if first is not None:
+            self._on_update(first)
+        else:
+            self._publish_idle()
+        logs = len(list(path.glob(self.watcher.pattern)))
+        result = {
+            "ok": True,
+            "log_dir": str(path),
+            "logs_found": logs,
+            "newest": newest_log(path).name if logs else None,
+            "saved_to": str(saved) if saved else None,
+        }
+        if save_error:
+            result["warning"] = f"watching the new directory, but could not save config: {save_error}"
+        return result
+
+    def _on_config(self, payload: dict) -> dict:
+        if "log_dir" in payload:
+            return self.set_log_dir(str(payload["log_dir"]))
+        return {"ok": False, "error": "nothing to change (expected log_dir)"}
 
     def _on_cards_changed(self) -> None:
         """Called from the resolver thread per card; coalesce into one push."""

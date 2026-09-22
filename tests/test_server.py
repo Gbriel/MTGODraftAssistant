@@ -56,7 +56,8 @@ def _read_sse_event(resp) -> dict:
 @pytest.fixture
 def server(tmp_path):
     _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
-    s = DraftServer(tmp_path, port=0, interval=0.05)
+    # config_path inside tmp so a test can never touch the real config.toml
+    s = DraftServer(tmp_path, port=0, interval=0.05, config_path=tmp_path / "unused.toml")
     s.start()
     try:
         yield s
@@ -184,6 +185,97 @@ def test_cards_resolve_and_images_served(tmp_path):
         assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
         with pytest.raises(urllib.error.HTTPError):
             _get(s.url + "img/../cards.sqlite")
+    finally:
+        s.stop()
+
+
+def _post(url: str, payload: dict) -> tuple[int, dict]:
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_server_starts_without_a_log_dir_and_accepts_one(tmp_path):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    _write(logs / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
+    cfg = tmp_path / "config.toml"
+    s = DraftServer(None, port=0, interval=0.05, config_path=cfg)
+    s.start()
+    try:
+        st = json.loads(_get(s.url + "api/state")[2])
+        assert st["log_dir"] is None and st["log_dir_ok"] is False
+        assert st["position"]["status"] == "idle"
+
+        code, res = _post(s.url + "api/config", {"log_dir": str(tmp_path / "missing")})
+        assert code == 400 and not res["ok"] and "not a directory" in res["error"]
+        code, res = _post(s.url + "api/config", {"log_dir": ""})
+        assert code == 400 and not res["ok"]
+        code, res = _post(s.url + "api/config", {"nope": 1})
+        assert code == 400 and not res["ok"]
+
+        code, res = _post(s.url + "api/config", {"log_dir": str(logs)})
+        assert code == 200 and res["ok"]
+        assert res["logs_found"] == 1 and res["newest"] == LOG_NAME
+        assert res["saved_to"] == str(cfg)
+        assert "log_dir" in cfg.read_text(encoding="utf-8")
+
+        st = json.loads(_get(s.url + "api/state")[2])
+        assert st["log_dir_ok"] is True
+        assert st["file"] == LOG_NAME
+        assert st["position"] == {"pack": 2, "pick": 1, "status": "on_screen"}
+
+        # the saved file round-trips through the real loader
+        import tomllib
+        with open(cfg, "rb") as fh:
+            assert os.path.normpath(tomllib.load(fh)["log_dir"]) == os.path.normpath(str(logs))
+    finally:
+        s.stop()
+
+
+def test_switching_log_dir_resets_to_new_directory(server, tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()                                   # empty: no logs yet
+    cfg = tmp_path / "cfg.toml"
+    server.config_path = cfg
+    code, res = _post(server.url + "api/config", {"log_dir": str(other)})
+    assert code == 200 and res["ok"] and res["logs_found"] == 0 and res["newest"] is None
+    st = json.loads(_get(server.url + "api/state")[2])
+    assert st["file"] is None and st["picks"] == []
+    assert st["position"]["status"] == "idle"
+    assert os.path.normpath(st["log_dir"]) == os.path.normpath(str(other))
+
+    # a log appearing in the new directory is picked up by the poll loop
+    _write(other / LOG_NAME, os.path.join(SNAP_DIR, "snap_001_3254b.txt"), 1_700_000_100.0)
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        st = json.loads(_get(server.url + "api/state")[2])
+        if st["file"] == LOG_NAME:
+            break
+        time.sleep(0.05)
+    assert st["file"] == LOG_NAME and st["position"]["pack"] == 1
+
+
+def test_bad_json_body_is_400(server):
+    req = urllib.request.Request(server.url + "api/config", data=b"{not json", method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        urllib.request.urlopen(req, timeout=5)
+    assert ei.value.code == 400
+
+
+def test_config_can_be_locked(tmp_path):
+    s = DraftServer(tmp_path, port=0, interval=0.05, allow_config=False)
+    s.start()
+    try:
+        code, res = _post(s.url + "api/config", {"log_dir": str(tmp_path)})
+        assert code == 403 and not res["ok"]
     finally:
         s.stop()
 

@@ -81,18 +81,33 @@ class DraftWatcher:
     ``run`` is a convenience loop for threads.
     """
 
-    def __init__(self, log_dir: str | os.PathLike[str], interval: float = 0.5,
+    def __init__(self, log_dir: str | os.PathLike[str] | None, interval: float = 0.5,
                  pattern: str = "*.txt") -> None:
-        self.log_dir = Path(log_dir)
+        self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.pattern = pattern
         self._stamp: FileStamp | None = None
         self._text: str | None = None
+        self._lock = threading.Lock()
         self.current: Update | None = None
+
+    def set_log_dir(self, log_dir: str | os.PathLike[str] | None) -> None:
+        """Switch directories and forget everything about the old file."""
+        with self._lock:
+            self.log_dir = Path(log_dir) if log_dir is not None else None
+            self._stamp = None
+            self._text = None
+            self.current = None
 
     # -- single step -------------------------------------------------------
 
     def poll(self) -> Update | None:
+        with self._lock:
+            return self._poll_locked()
+
+    def _poll_locked(self) -> Update | None:
+        if self.log_dir is None:
+            return None
         path = newest_log(self.log_dir, self.pattern)
         if path is None:
             return None

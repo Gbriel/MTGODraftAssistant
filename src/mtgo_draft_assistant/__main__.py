@@ -33,20 +33,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verbose", action="store_true", help="log HTTP requests")
     args = ap.parse_args(argv)
 
+    log_dir = None
     try:
         log_dir = resolve_log_dir(args.log_dir)
-    except ConfigError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    if not log_dir.is_dir():
+    except ConfigError:
+        print("No draft log directory configured yet. Set it in the web page "
+              "(it's the path from MTGO's Settings -> Save Draft Log).", flush=True)
+    if log_dir is not None and not log_dir.is_dir():
         print(f"warning: {log_dir} does not exist yet; waiting for MTGO to create it",
-              file=sys.stderr)
+              file=sys.stderr, flush=True)
 
     resolver = None if args.no_cards else CardResolver(args.cache_dir)
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose, resolver=resolver)
     server.start()
-    print(f"MTGO Draft Assistant watching {log_dir}", flush=True)
+    print(f"MTGO Draft Assistant watching {log_dir or '(no directory set)'}", flush=True)
     if resolver is not None:
         print(f"Card data cached in {args.cache_dir}", flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)

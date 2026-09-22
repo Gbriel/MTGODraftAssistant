@@ -106,6 +106,44 @@ body {
 .taken .opts input { margin: 0; accent-color: var(--accent); }
 .taken .total { color: var(--muted); font-family: var(--mono); font-size: 11px; margin-left: 6px; }
 
+/* log directory form */
+.logdir {
+  margin: 10px 0 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--pane-2);
+  border: 1px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.logdir-text { font-size: 13px; }
+.logdir-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.logdir-row input {
+  flex: 1 1 320px;
+  font: 13px var(--mono);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+.logdir-row button {
+  font: 13px var(--font);
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--pane);
+  color: var(--fg);
+  cursor: pointer;
+}
+.logdir-row button[type="submit"] { border-color: var(--accent); color: var(--accent); }
+.logdir-msg { font-size: 12px; font-family: var(--mono); min-height: 1em; }
+.logdir-msg.err { color: var(--gone); }
+.logdir-msg.ok { color: var(--back); }
+.foot a { color: var(--accent); text-decoration: none; }
+.foot a:hover { text-decoration: underline; }
+
 .warnings {
   margin: 8px 0;
   padding: 8px 12px;

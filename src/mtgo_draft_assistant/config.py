@@ -11,6 +11,7 @@ so we don't read that. Resolution order:
 
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from pathlib import Path
@@ -36,6 +37,23 @@ def load_config() -> dict:
             data["_source"] = str(path)
             return data
     return {}
+
+
+def save_log_dir(log_dir: str | Path, path: Path | None = None) -> Path:
+    """
+    Persist the directory to config.toml (repo root by default) so the next
+    start picks it up. Written with forward slashes, which TOML and Windows
+    both accept, so no escaping games.
+    """
+    target = path or (REPO_ROOT / CONFIG_NAME)
+    value = str(Path(log_dir)).replace("\\", "/")
+    body = (
+        "# MTGO draft log directory: the path from MTGO's Settings -> Save Draft Log.\n"
+        "# Written by the web UI; edit by hand if you prefer.\n"
+        f"log_dir = {json.dumps(value, ensure_ascii=False)}\n"
+    )
+    target.write_text(body, encoding="utf-8")
+    return target
 
 
 def resolve_log_dir(cli_value: str | None = None) -> Path:

@@ -105,6 +105,26 @@ def test_non_txt_files_ignored(tmp_path):
     assert w.poll() is None
 
 
+def test_no_log_dir_yields_nothing():
+    w = DraftWatcher(None)
+    assert w.poll() is None
+
+
+def test_set_log_dir_forgets_old_file(tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    _write(a / LOG_NAME, FINAL, 1_700_000_000.0)
+    _write(b / LOG_NAME, snapshots()[0], 1_600_000_000.0)      # older, same name
+    w = DraftWatcher(a)
+    assert len(w.poll().draft.picks) == 45
+    w.set_log_dir(b)
+    u = w.poll()
+    assert u is not None and u.new_draft and u.path == b / LOG_NAME
+    assert len(u.draft.picks) < 45
+    assert w.poll() is None
+
+
 def test_run_loop_invokes_callback_and_stops(tmp_path):
     log = tmp_path / LOG_NAME
     _write(log, snapshots()[0], 1_700_000_000.0)

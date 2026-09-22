@@ -24,6 +24,19 @@
   <div id="taken" class="taken"></div>
   <div id="warnings" class="warnings" hidden></div>
 
+  <form id="logdir-form" class="logdir" hidden>
+    <div class="logdir-text">
+      <strong>MTGO draft log folder.</strong>
+      In MTGO, open Settings, tick <em>Save Draft Log</em>, and paste the folder path shown there.
+    </div>
+    <div class="logdir-row">
+      <input id="logdir-input" type="text" spellcheck="false" placeholder="C:\Users\you\MTGODraftLogs" autocomplete="off">
+      <button type="submit">Save</button>
+      <button type="button" id="logdir-cancel">Cancel</button>
+    </div>
+    <div id="logdir-msg" class="logdir-msg"></div>
+  </form>
+
   <main class="grid">
     <section class="pane pane-wide" id="pane-current">
       <h2>On screen now <span id="current-count" class="count"></span></h2>
@@ -53,7 +66,7 @@
   </details>
 
   <footer class="foot muted">
-    <span id="file"></span>
+    <span><span id="file"></span> <a href="#" id="logdir-change">change folder</a></span>
     <span id="updated"></span>
   </footer>
 

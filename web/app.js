@@ -179,9 +179,75 @@
     pend.textContent = st.cards_pending ? `fetching ${st.cards_pending} cards…`
       : (st.card_errors && st.card_errors.length ? `Scryfall: ${st.card_errors.length} recent errors` : "");
     pend.title = (st.card_errors || []).join("\n");
-    $("file").textContent = st.file ? `${st.log_dir}\\${st.file}` : `watching ${st.log_dir} — no .txt logs yet`;
+    if (!st.log_dir) $("file").textContent = "no draft log folder set";
+    else if (!st.log_dir_ok) $("file").textContent = `${st.log_dir} — folder not found`;
+    else if (st.file) $("file").textContent = `${st.log_dir}\\${st.file}`;
+    else $("file").textContent = `watching ${st.log_dir} — no .txt logs yet`;
     $("updated").textContent = st.updated_at ? `updated ${st.updated_at.replace("T", " ")}` : "";
+    updateLogDirForm(st);
   }
+
+  // ------------------------------------------------------ log dir form
+  const form = $("logdir-form");
+  const input = $("logdir-input");
+  const msg = $("logdir-msg");
+  let editing = false;
+  let lastLogDir = null;
+
+  function updateLogDirForm(st) {
+    lastLogDir = st.log_dir;
+    const needed = !st.log_dir || !st.log_dir_ok;
+    form.hidden = !(needed || editing);
+    $("logdir-cancel").hidden = needed;
+    if (!form.hidden && !input.value && st.log_dir) input.value = st.log_dir;
+    if (needed && !editing) {
+      msg.className = "logdir-msg err";
+      msg.textContent = st.log_dir ? "That folder doesn't exist on this machine." : "";
+    }
+    const cur = $("current-empty");
+    if (needed && !st.picks.length) cur.textContent = "Set the draft log folder above to get started.";
+  }
+  $("logdir-change").addEventListener("click", (ev) => {
+    ev.preventDefault();
+    editing = true;
+    form.hidden = false;
+    $("logdir-cancel").hidden = false;
+    input.value = lastLogDir || "";
+    msg.textContent = "";
+    input.focus();
+    input.select();
+  });
+  $("logdir-cancel").addEventListener("click", () => {
+    editing = false;
+    form.hidden = true;
+  });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    msg.className = "logdir-msg";
+    msg.textContent = "saving…";
+    try {
+      const r = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ log_dir: input.value }),
+      });
+      const res = await r.json();
+      if (!res.ok) {
+        msg.className = "logdir-msg err";
+        msg.textContent = res.error || "could not save";
+        return;
+      }
+      msg.className = "logdir-msg ok";
+      msg.textContent = `watching ${res.log_dir} · ${res.logs_found} log${res.logs_found === 1 ? "" : "s"} found`
+        + (res.newest ? ` · newest: ${res.newest}` : "")
+        + (res.warning ? ` · ${res.warning}` : "");
+      editing = false;
+      setTimeout(() => { if (!editing) form.hidden = !!lastLogDir; }, 2500);
+    } catch (e) {
+      msg.className = "logdir-msg err";
+      msg.textContent = "server not reachable";
+    }
+  });
 
   // ------------------------------------------------------------- current
   function renderCurrent(st) {
