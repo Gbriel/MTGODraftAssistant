@@ -71,50 +71,81 @@
   }
 
   // ------------------------------------------------------- colour tally
-  // How much of each colour a card represents when the pod takes it:
-  // mono-coloured 1 to its colour; multicolour ½ per colour; lands ½ per
-  // colour of their identity; anything with no colours counts as colourless.
-  function colorShares(name) {
+  // Which colour buckets a card falls into. Mono-coloured: its colour.
+  // Multicolour: every one of its colours (whole, not fractional). Lands:
+  // every colour of their identity. No colours at all: colourless.
+  // Multicolour and lands can be excluded with the toggles.
+  const tallyOpts = { multi: true, lands: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem("tallyOpts") || "{}");
+    if (typeof saved.multi === "boolean") tallyOpts.multi = saved.multi;
+    if (typeof saved.lands === "boolean") tallyOpts.lands = saved.lands;
+  } catch (e) { /* ignore */ }
+
+  function colorBuckets(name) {
     const i = info(name);
-    if (!i || i.status !== "ok") return { "?": 1 };
-    const cols = i.group === "L" ? (i.color_identity || []) : (i.colors || []);
-    if (!cols.length) return { C: 1 };
-    if (cols.length === 1) return { [cols[0]]: 1 };
-    const out = {};
-    for (const c of cols) out[c] = 0.5;
-    return out;
+    if (!i || i.status !== "ok") return ["?"];
+    if (i.group === "L") {
+      if (!tallyOpts.lands) return [];
+      const ci = i.color_identity || [];
+      return ci.length ? ci : ["C"];
+    }
+    if (i.group === "M") return tallyOpts.multi ? i.colors : [];
+    return i.colors && i.colors.length ? i.colors : ["C"];
   }
   const TALLY_ORDER = ["W", "U", "B", "R", "G", "C"];
-  const TALLY_LABEL = { W: "W", U: "U", B: "B", R: "R", G: "G", C: "C" };
-  function fmt(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 
   function renderTaken(st) {
     const box = $("taken");
     clear(box);
-    const tally = {};
+    const taken = {}, passed = {};
     let total = 0;
     for (const w of st.wheels) {
-      for (const n of w.taken) {
-        total += 1;
-        for (const [c, v] of Object.entries(colorShares(n))) tally[c] = (tally[c] || 0) + v;
+      const gone = new Set(w.taken);
+      for (const n of w.passed) {
+        const isGone = gone.has(n);
+        if (isGone) total += 1;
+        for (const c of colorBuckets(n)) {
+          passed[c] = (passed[c] || 0) + 1;
+          if (isGone) taken[c] = (taken[c] || 0) + 1;
+        }
       }
     }
     if (!total) return;
+
     box.appendChild(el("span", "lbl", "pod took"));
-    for (const c of TALLY_ORDER) {
-      const cell = el("span", `cell g-${c}`);
-      cell.appendChild(el("small", null, TALLY_LABEL[c]));
-      cell.appendChild(document.createTextNode(fmt(tally[c] || 0)));
-      box.appendChild(cell);
-    }
-    if (tally["?"]) {
-      const cell = el("span", "cell g-X");
-      cell.appendChild(el("small", null, "?"));
-      cell.appendChild(document.createTextNode(fmt(tally["?"])));
-      cell.title = "cards without Scryfall data yet";
-      box.appendChild(cell);
-    }
-    box.appendChild(el("span", "total", `${total} cards seen taken`));
+    const cellFor = (c, cls, tip) => {
+      const t = taken[c] || 0, p = passed[c] || 0;
+      const cell = el("span", `cell ${cls}`);
+      cell.appendChild(el("small", null, c));
+      cell.appendChild(el("b", null, String(t)));
+      const pct = p ? Math.round(100 * (p - t) / p) : null;
+      cell.appendChild(el("span", "pct", pct === null ? "–" : `${pct}%`));
+      cell.title = tip || `${c}: pod took ${t} of the ${p} you passed in wheeled packs; ${pct === null ? "none passed" : pct + "% wheeled back"}`;
+      return cell;
+    };
+    for (const c of TALLY_ORDER) box.appendChild(cellFor(c, `g-${c}`));
+    if (passed["?"]) box.appendChild(cellFor("?", "g-X", "cards without Scryfall data yet"));
+
+    const opts = el("span", "opts");
+    const mk = (key, label) => {
+      const lab = el("label");
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.checked = tallyOpts[key];
+      cb.addEventListener("change", () => {
+        tallyOpts[key] = cb.checked;
+        try { localStorage.setItem("tallyOpts", JSON.stringify(tallyOpts)); } catch (e) { /* ignore */ }
+        renderTaken(st);
+      });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(label));
+      return lab;
+    };
+    opts.appendChild(mk("multi", "multicolor"));
+    opts.appendChild(mk("lands", "lands"));
+    box.appendChild(opts);
+    box.appendChild(el("span", "total", `${total} taken · % = share of that colour that wheeled`));
   }
 
   // -------------------------------------------------------------- header
