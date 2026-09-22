@@ -3,10 +3,11 @@ Parser for Magic Online draft logs (client 3.4.158.x, verified 2026-09-21).
 
 Format notes learned empirically from a live capture — these are the traps:
 
-  * The pick number in the "Pack N pick M:" header is WRONG. MTGO emits
-    "pick 1" for the first pick of each pack and "pick 2" for every pick
-    after that. The PACK number is correct. Real pick position must be
-    derived by counting blocks within a pack.
+  * The pick number in the "Pack N pick M:" header is WRONG, and not in a
+    predictable way: one draft showed "pick 1" once then "pick 2" x14 in
+    pack 1, but "1, 2 x10, 3 x4" in pack 2. Ignore the field entirely. The
+    PACK number is correct. Real pick position must be derived by counting
+    blocks within a pack (cross-check: len(available) == packsize + 1 - pick).
 
   * The "------ Pack 1: <name> ------" separator is emitted before every
     pick in pack 1 and NOT AT ALL in later packs. Do not use it to detect
