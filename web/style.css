@@ -229,14 +229,17 @@ details.picks[open] .hint { display: none; }
 .tiles { display: flex; flex-wrap: wrap; gap: 3px; }
 .tilerow { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; align-items: flex-start; }
 .tilerow .sep { width: 8px; }
+.packrow { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; }
+.packrow-cards { display: flex; flex-wrap: wrap; gap: 3px; flex: 1 1 0; min-width: 0; }
 .prev {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
   padding: 3px 10px 3px 4px;
-  margin-right: 8px;
   border-right: 2px solid var(--line);
+  flex: 0 0 auto;
+  align-self: stretch;
 }
 .prev-label {
   font-size: 9.5px;

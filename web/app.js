@@ -70,6 +70,15 @@
     box.appendChild(tile(name, "sm", "mine", "your pick from this pack"));
     return box;
   }
+  // [previous pick] | [the pack's cards, wrapping in their own space]
+  function packRow(prevName, tiles) {
+    const row = el("div", "packrow");
+    row.appendChild(prevPick(prevName));
+    const cards = el("div", "packrow-cards");
+    for (const t of tiles) cards.appendChild(t);
+    row.appendChild(cards);
+    return row;
+  }
 
   // names are rendered in the order given, i.e. as MTGO listed them
   function tileRow(names, extraCls, titleFor) {
@@ -284,10 +293,8 @@
       head.appendChild(el("span", "pos", pos(wheel.pack, wheel.first_pick)));
       head.appendChild(document.createTextNode(` came back. The pod took ${wheel.taken.length}:`));
       note.appendChild(head);
-      const row = el("div", "tilerow");
-      row.appendChild(prevPick(wheel.your_pick));
-      for (const n of wheel.taken) row.appendChild(tile(n, "sm", "gone", "taken by the pod"));
-      note.appendChild(row);
+      note.appendChild(packRow(wheel.your_pick,
+        wheel.taken.map((n) => tile(n, "sm", "gone", "taken by the pod"))));
     }
 
     for (const c of cur.cards) list.appendChild(tile(c, "sm"));
@@ -331,10 +338,7 @@
       h.appendChild(el("span", "muted",
         `your ${pos(f.pack, f.first_pick)} pack · ${remaining} of these ${f.passed.length} will be left`));
       b.appendChild(h);
-      const row = el("div", "tilerow");
-      row.appendChild(prevPick(f.your_pick));
-      for (const c of f.passed) row.appendChild(tile(c, "sm", "", "passed on"));
-      b.appendChild(row);
+      b.appendChild(packRow(f.your_pick, f.passed.map((c) => tile(c, "sm", "", "passed on"))));
       box.appendChild(b);
     }
     head.hidden = false;
@@ -355,15 +359,10 @@
       b.appendChild(head);
       // one wrapping row: your pick (gold), then the pack you passed in its
       // original order, with a red X over every card that did not come back
-      const row = el("div", "tilerow");
-      row.appendChild(prevPick(w.your_pick));
       const back = new Set(w.returned);
-      for (const n of w.passed) {
-        row.appendChild(back.has(n)
-          ? tile(n, "sm", "back", "came back to you")
-          : tile(n, "sm", "gone", "taken by the pod"));
-      }
-      b.appendChild(row);
+      b.appendChild(packRow(w.your_pick, w.passed.map((n) => back.has(n)
+        ? tile(n, "sm", "back", "came back to you")
+        : tile(n, "sm", "gone", "taken by the pod"))));
       if (w.warning) b.appendChild(el("div", "warn", w.warning));
       box.appendChild(b);
     }
