@@ -222,9 +222,11 @@ details.picks[open] .hint { display: none; }
 
 .legend { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; display: inline-flex; gap: 10px; align-items: center; }
 .legend .sw { display: inline-block; width: 9px; height: 12px; border-radius: 2px; background: #555; margin-right: 4px; vertical-align: -2px; }
-.legend .sw.mine { outline: 2px solid var(--mine); }
-.legend .sw.gone { position: relative; }
-.legend .sw.gone::after { content: "✕"; position: absolute; inset: 0; color: var(--gone); font-size: 12px; line-height: 12px; text-align: center; font-weight: 700; }
+.legend .sw { position: relative; }
+.legend .sw::after { position: absolute; inset: 0; font-size: 11px; line-height: 12px; text-align: center; font-weight: 700; }
+.legend .sw.mine::after { content: "★"; color: var(--mine); }
+.legend .sw.gone::after { content: "✕"; color: var(--gone); }
+.legend .sw.back::after { content: "○"; color: var(--back); font-size: 13px; }
 
 .tile {
   color: #111;
@@ -261,7 +263,36 @@ details.picks[open] .hint { display: none; }
 .tile.sm .name { font-size: 9.5px; }
 .tile .meta { font-size: 10px; font-family: var(--mono); color: #333; text-align: center; }
 .tile.sm .meta { font-size: 8.5px; }
-.tile.mine { outline: 2px solid var(--mine); outline-offset: 0; }
+/* your pick: gold star in the middle of the card */
+.tile.mine { position: relative; }
+.tile.mine::after {
+  content: "★";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--mine);
+  text-shadow: 0 0 3px #000, 0 0 8px rgba(0,0,0,.9);
+  pointer-events: none;
+}
+/* came back to you: green ring in the middle of the card */
+.tile.back { position: relative; }
+.tile.back::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid var(--back);
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,.7), inset 0 0 0 1.5px rgba(0,0,0,.7);
+  pointer-events: none;
+}
 /* taken by the pod: dimmed with a red X across the card */
 .tile.gone { position: relative; }
 .tile.gone img, .tile.gone .name, .tile.gone .meta { opacity: .89; }

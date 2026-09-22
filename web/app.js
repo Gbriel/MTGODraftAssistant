@@ -333,7 +333,7 @@
       const back = new Set(w.returned);
       for (const n of w.passed) {
         row.appendChild(back.has(n)
-          ? tile(n, "sm", "", "came back to you")
+          ? tile(n, "sm", "back", "came back to you")
           : tile(n, "sm", "gone", "taken by the pod"));
       }
       b.appendChild(row);
