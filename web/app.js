@@ -286,31 +286,53 @@
     for (const c of cur.cards) list.appendChild(tile(c, "lg"));
   }
 
-  // ------------------------------------------------------------ in flight
-  function renderInFlight(st) {
-    const box = $("inflight");
+  // ------------------------------------------------------------- upcoming
+  // The rest of this pack, pick by pick. A pick whose pack you passed
+  // earlier shows what you passed (N-1 of those will be gone); a pick whose
+  // pack you have never held is "unseen".
+  function renderUpcoming(st) {
+    const box = $("upcoming");
+    const head = $("upcoming-head");
     clear(box);
-    $("inflight-count").textContent = st.in_flight.length ? String(st.in_flight.length) : "";
-    $("inflight-empty").textContent = st.in_flight.length ? "" :
-      (st.current_pack ? "Nothing you passed is due back." : "");
-    for (const f of st.in_flight) {
+    head.hidden = true;
+    $("upcoming-count").textContent = "";
+    const p = st.position;
+    const d = st.draft;
+    if (!d || p.pack === null || p.status === "idle") return;
+    const size = d.pack_sizes[String(p.pack)];
+    if (!size || p.pick > size) return;                 // pack finished; next pack is all unseen
+    const first = p.status === "on_screen" ? p.pick + 1 : p.pick;
+    if (first > size) return;
+
+    const byDue = new Map(st.in_flight.map((f) => [f.due_pick, f]));
+    const n = d.pod_size;
+    let known = 0;
+    for (let j = first; j <= size; j++) {
+      const f = byDue.get(j);
+      if (!f) {
+        const row = el("div", "upcoming-row unseen");
+        row.appendChild(el("span", "pick", `Pick ${j}`));
+        row.appendChild(el("span", "muted", `unseen · ${size + 1 - j} card${size + 1 - j === 1 ? "" : "s"}`));
+        box.appendChild(row);
+        continue;
+      }
+      known += 1;
       const b = el("div", "block");
-      const head = el("div", "head");
-      head.appendChild(el("span", "pos", pos(f.pack, f.first_pick)));
-      // N-1 other drafters each take one before it returns
-      const n = st.draft ? st.draft.pod_size : 0;
-      const returning = Math.max(0, f.passed.length - (n - 1));
-      head.appendChild(el("span", "due",
-        `back at ${pos(f.pack, f.due_pick)} · in ${f.picks_until_return} pick${f.picks_until_return === 1 ? "" : "s"}`
-        + ` · ${returning} card${returning === 1 ? "" : "s"} will return`));
-      b.appendChild(head);
+      const h = el("div", "head");
+      h.appendChild(el("span", "pick", `Pick ${j}`));
+      const remaining = Math.max(0, f.passed.length - (n - 1));
+      h.appendChild(el("span", "muted",
+        `your ${pos(f.pack, f.first_pick)} pack · ${remaining} of these ${f.passed.length} will be left`));
+      b.appendChild(h);
       const row = el("div", "tilerow");
       row.appendChild(tile(f.your_pick, "sm", "mine", "your pick"));
       row.appendChild(el("span", "sep"));
-      for (const n of f.passed) row.appendChild(tile(n, "sm", "", "passed on"));
+      for (const c of f.passed) row.appendChild(tile(c, "sm", "", "passed on"));
       b.appendChild(row);
       box.appendChild(b);
     }
+    head.hidden = false;
+    $("upcoming-count").textContent = `${known} seen · ${size - first + 1 - known} unseen`;
   }
 
   // --------------------------------------------------------------- wheels
@@ -382,7 +404,7 @@
     renderHeader(st);
     renderTaken(st);
     renderCurrent(st);
-    renderInFlight(st);
+    renderUpcoming(st);
     renderWheels(st);
     renderPicks(st);
   }

@@ -159,10 +159,25 @@ body {
 /* grid: current pack gets the wide column; picks sit below, collapsed */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 16px;
   margin-top: 12px;
 }
+
+/* upcoming picks list */
+.upcoming-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.pick { color: var(--accent); font-weight: 600; font-family: var(--mono); font-size: 12px; }
+.upcoming-row.unseen .pick { color: var(--muted); }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
 details.picks { margin-top: 16px; min-height: 0; }
