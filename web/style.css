@@ -133,62 +133,53 @@ body {
 .g-L { background: var(--c-L); }
 .g-X { background: var(--c-X); }
 
-/* large tile: image + name, used for the pack on screen */
+/* A tile is the card image inside a colour-coded frame. When there is no
+   image yet, the frame holds the name instead, at the same size. */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: 8px;
 }
+.tilerow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: flex-start; }
+.tilerow .sep { width: 6px; }
+.tilerow .label { margin: 0; align-self: center; }
+
 .tile {
   color: #111;
   border-radius: 6px;
-  padding: 5px;
+  padding: 3px;
+  border: 1px solid rgba(0,0,0,.3);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  border: 1px solid rgba(0,0,0,.25);
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 152 / 210;
+  cursor: default;
 }
+.tile.lg { width: 100%; }
+.tile.sm { width: 72px; flex: 0 0 auto; padding: 2px; border-radius: 4px; }
 .tile img {
   width: 100%;
   aspect-ratio: 146 / 204;
-  border-radius: 5px;
+  border-radius: 4px;
   display: block;
   background: rgba(0,0,0,.08);
 }
 .tile .name {
-  font-size: 12px;
-  line-height: 1.25;
   font-weight: 600;
+  line-height: 1.2;
   overflow-wrap: anywhere;
+  text-align: center;
+  padding: 2px;
 }
-.tile .meta {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: #333;
-  display: flex;
-  justify-content: space-between;
-}
+.tile.lg .name { font-size: 12px; }
+.tile.sm .name { font-size: 9.5px; }
+.tile .meta { font-size: 10px; font-family: var(--mono); color: #333; text-align: center; }
+.tile.sm .meta { font-size: 8.5px; }
+.tile.mine { outline: 2px solid var(--mine); outline-offset: 0; }
 .tile.flash { animation: flash 1.6s ease-out; }
-
-/* small chip: name only, colour-coded, image on hover */
-.cardlist { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; }
-.card {
-  color: #111;
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-size: 12.5px;
-  line-height: 1.3;
-  border: 1px solid rgba(0,0,0,.25);
-  cursor: default;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-}
-.card .tag { font-family: var(--mono); font-size: 10px; color: #444; }
-.card.is-gone { text-decoration: line-through; opacity: .85; }
-.card.flash { animation: flash 1.6s ease-out; }
 @keyframes flash {
-  from { box-shadow: 0 0 0 3px var(--mine); }
+  from { box-shadow: 0 0 0 4px var(--mine); }
   to   { box-shadow: 0 0 0 0 transparent; }
 }
 
@@ -237,13 +228,12 @@ body {
   font-size: 13px;
 }
 .wheel-note .pos { font-family: var(--mono); color: var(--accent); }
-.wheel-note .you { color: var(--mine); font-weight: 600; }
 
 /* hover preview */
 .preview {
   position: fixed;
   z-index: 10;
-  width: 220px;
+  width: 260px;
   border-radius: 10px;
   box-shadow: 0 6px 24px rgba(0,0,0,.6);
   pointer-events: none;

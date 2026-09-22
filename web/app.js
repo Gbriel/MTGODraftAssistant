@@ -48,41 +48,41 @@
     return i.mana_cost.replace(/[{}]/g, "").replace(/ \/\/ .*/, "");
   }
 
-  // small colour-coded chip; hover shows the image
-  function chip(name, extraCls, tag) {
-    const c = el("span", `card g-${group(name)}` + (extraCls ? " " + extraCls : ""));
-    if (tag !== undefined) c.appendChild(el("span", "tag", String(tag)));
-    c.appendChild(el("span", null, name));
-    c.dataset.card = name;
+  // A card cell: the image in a colour-coded frame. Text only appears when
+  // there is no image (not fetched yet, or Scryfall doesn't know the card).
+  //   size: "lg" for the pack on screen, "sm" everywhere else
+  //   extraCls: e.g. "mine" (gold outline), "flash"
+  //   title: extra tooltip line (pick position etc.)
+  function tile(name, size, extraCls, title) {
     const i = info(name);
-    if (i && i.type_line) c.title = `${name}\n${i.type_line}${i.mana_cost ? "  " + i.mana_cost : ""}`;
-    return c;
-  }
-  function chipList(names, extraCls) {
-    const ul = el("div", "cardlist");
-    for (const n of sortCards(names)) ul.appendChild(chip(n, extraCls));
-    return ul;
-  }
-
-  // large tile with image
-  function tile(name, flash) {
-    const i = info(name);
-    const t = el("div", `tile g-${group(name)}` + (flash ? " flash" : ""));
+    const t = el("div", `tile ${size} g-${group(name)}` + (extraCls ? " " + extraCls : ""));
     t.dataset.card = name;
+    const showName = () => {
+      if (!t.querySelector(".name")) {
+        t.appendChild(el("div", "name", name));
+        if (i && (i.mana_cost || i.group === "L")) t.appendChild(el("div", "meta", manaLabel(i)));
+      }
+    };
     if (i && i.image) {
       const img = el("img");
       img.src = i.image;
       img.alt = name;
       img.loading = "lazy";
+      img.onerror = () => { img.remove(); showName(); };
       t.appendChild(img);
+    } else {
+      showName();
     }
-    t.appendChild(el("div", "name", name));
-    const meta = el("div", "meta");
-    meta.appendChild(el("span", null, i ? manaLabel(i) : ""));
-    meta.appendChild(el("span", null, i && i.type_line ? i.type_line.split(" — ")[0].split(" // ")[0] : ""));
-    t.appendChild(meta);
-    if (i && i.type_line) t.title = `${name}\n${i.type_line}`;
+    const lines = [name];
+    if (i && i.type_line) lines.push(i.type_line + (i.mana_cost ? "  " + i.mana_cost : ""));
+    if (title) lines.push(title);
+    t.title = lines.join("\n");
     return t;
+  }
+  function tileRow(names, extraCls, titleFor) {
+    const row = el("div", "tilerow");
+    for (const n of sortCards(names)) row.appendChild(tile(n, "sm", extraCls, titleFor && titleFor(n)));
+    return row;
   }
 
   // -------------------------------------------------------------- header
@@ -145,14 +145,16 @@
       note.hidden = false;
       const head = el("div");
       head.appendChild(el("span", "pos", pos(wheel.pack, wheel.first_pick)));
-      head.appendChild(document.createTextNode(" came back. You took "));
-      head.appendChild(el("span", "you", wheel.your_pick));
-      head.appendChild(document.createTextNode(`; the pod took ${wheel.taken.length}:`));
+      head.appendChild(document.createTextNode(` came back. You took the outlined card; the pod took ${wheel.taken.length}.`));
       note.appendChild(head);
-      note.appendChild(chipList(wheel.taken, "is-gone"));
+      const row = el("div", "tilerow");
+      row.appendChild(tile(wheel.your_pick, "sm", "mine", "your pick"));
+      row.appendChild(el("span", "sep"));
+      for (const n of sortCards(wheel.taken)) row.appendChild(tile(n, "sm", "", "taken by the pod"));
+      note.appendChild(row);
     }
 
-    for (const c of sortCards(cur.cards)) list.appendChild(tile(c, false));
+    for (const c of sortCards(cur.cards)) list.appendChild(tile(c, "lg"));
   }
 
   // ------------------------------------------------------------ in flight
@@ -168,10 +170,12 @@
       head.appendChild(el("span", "pos", pos(f.pack, f.first_pick)));
       head.appendChild(el("span", "due",
         `back at ${pos(f.pack, f.due_pick)} · in ${f.picks_until_return} pick${f.picks_until_return === 1 ? "" : "s"}`));
-      head.appendChild(el("span", "you", `you took ${f.your_pick}`));
       b.appendChild(head);
-      b.appendChild(el("div", "label", `passed ${f.passed.length}`));
-      b.appendChild(chipList(f.passed));
+      const row = el("div", "tilerow");
+      row.appendChild(tile(f.your_pick, "sm", "mine", "your pick"));
+      row.appendChild(el("span", "sep"));
+      for (const n of sortCards(f.passed)) row.appendChild(tile(n, "sm", "", "passed on"));
+      b.appendChild(row);
       box.appendChild(b);
     }
   }
@@ -187,12 +191,15 @@
       const b = el("div", "block");
       const head = el("div", "head");
       head.appendChild(el("span", "pos", `${pos(w.pack, w.first_pick)} → ${pos(w.pack, w.return_pick)}`));
-      head.appendChild(el("span", "you", `you took ${w.your_pick}`));
       b.appendChild(head);
-      b.appendChild(el("div", "label gone", `pod took ${w.taken.length}`));
-      b.appendChild(chipList(w.taken, "is-gone"));
+      const top = el("div", "tilerow");
+      top.appendChild(tile(w.your_pick, "sm", "mine", "your pick"));
+      top.appendChild(el("span", "sep"));
+      top.appendChild(el("div", "label gone", `pod took ${w.taken.length}`));
+      b.appendChild(top);
+      b.appendChild(tileRow(w.taken, "", () => "taken by the pod"));
       b.appendChild(el("div", "label back", `came back ${w.returned.length}`));
-      b.appendChild(chipList(w.returned));
+      b.appendChild(tileRow(w.returned, "", () => "came back to you"));
       if (w.warning) b.appendChild(el("div", "warn", w.warning));
       box.appendChild(b);
     }
@@ -212,13 +219,12 @@
     const byName = new Map(done.map((p) => [p.picked, p]));
     for (const [g, names] of groupBy(done.map((p) => p.picked))) {
       box.appendChild(el("div", "group-head", `${GROUP_LABEL[g]} · ${names.length}`));
-      const list = el("div", "cardlist");
+      const row = el("div", "tilerow");
       for (const n of names) {
         const p = byName.get(n);
-        const c = chip(n, flashNew && n === newest ? "flash" : "", pos(p.pack, p.pick));
-        list.appendChild(c);
+        row.appendChild(tile(n, "sm", flashNew && n === newest ? "flash" : "", `picked ${pos(p.pack, p.pick)}`));
       }
-      box.appendChild(list);
+      box.appendChild(row);
     }
   }
 
@@ -235,7 +241,7 @@
   const preview = $("preview");
   document.addEventListener("mouseover", (ev) => {
     const t = ev.target.closest("[data-card]");
-    if (!t || t.classList.contains("tile")) { preview.hidden = true; return; }
+    if (!t) { preview.hidden = true; return; }
     const i = info(t.dataset.card);
     if (!i || !i.image) { preview.hidden = true; return; }
     preview.src = i.image;
@@ -243,7 +249,7 @@
   });
   document.addEventListener("mousemove", (ev) => {
     if (preview.hidden) return;
-    const w = 220, h = 308, pad = 14;
+    const w = 260, h = 364, pad = 14;
     let x = ev.clientX + pad, y = ev.clientY + pad;
     if (x + w > window.innerWidth) x = ev.clientX - w - pad;
     if (y + h > window.innerHeight) y = window.innerHeight - h - pad;
