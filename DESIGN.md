@@ -240,7 +240,9 @@ src/mtgo_draft_assistant/
     server.py        # stdlib http.server: UI, /api/state JSON, /events SSE — DONE
     __main__.py      # CLI entry point — DONE
     ratings.py       # 17Lands fetch + disk cache + name join
-    scryfall.py      # card metadata/images, bulk file cached locally
+    scryfall.py      # card colours/type/images — DONE; lazy per-card, SQLite + JPEG cache
+                     # (deliberately NOT the bulk file: it is hundreds of MB and the
+                     # user asked for low memory; a cube shows a few hundred names)
     matches.py       # P2: match log parsing
     stats.py         # P2: personal WR, pod records
     db.py            # SQLite schema + migrations

@@ -14,7 +14,9 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
+from mtgo_draft_assistant.scryfall import CardResolver  # noqa: E402
 from mtgo_draft_assistant.server import DraftServer, build_state  # noqa: E402
+from test_scryfall import CARDS, JPEG, FakeClient, payload  # noqa: E402
 
 SNAP_DIR = os.path.join(ROOT, "tests", "fixtures", "snapshots")
 FINAL = os.path.join(ROOT, "tests", "fixtures", "final_draft_log.txt")
@@ -137,6 +139,53 @@ def test_sse_sends_current_state_then_updates(server):
         assert second["position"]["pack"] == 2
     finally:
         resp.close()
+
+
+def test_text_only_server_has_empty_cards(server):
+    st = json.loads(_get(server.url + "api/state")[2])
+    assert st["cards"] == {} and st["cards_pending"] == 0
+    with pytest.raises(urllib.error.HTTPError) as ei:
+        _get(server.url + "img/anything.jpg")
+    assert ei.value.code == 404
+
+
+def test_cards_resolve_and_images_served(tmp_path):
+    _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
+    cards = dict(CARDS)
+    cards["Mana Vault"] = payload("Mana Vault", "id-vault", [], "Artifact", 1, "{1}")
+    cards["Black Lotus"] = payload("Black Lotus", "id-lotus", [], "Artifact", 0, "{0}")
+    client = FakeClient(cards=cards)
+    resolver = CardResolver(tmp_path / "cache", client=client)
+    s = DraftServer(tmp_path, port=0, interval=0.05, resolver=resolver)
+    s.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["cards_pending"] == 0 and st["cards"].get("Mother of Runes", {}).get("image"):
+                break
+            time.sleep(0.05)
+        assert st["cards_pending"] == 0
+        mom = st["cards"]["Mother of Runes"]
+        assert mom["group"] == "W" and mom["image"] == "/img/id-mom.jpg"
+        assert st["cards"]["Mana Vault"]["group"] == "C"
+        assert st["cards"]["Dark Ritual"] == {
+            "status": "missing", "group": "X", "colors": [], "type_line": "",
+            "mana_cost": "", "cmc": 0.0, "image": None,
+        }
+        # every name in the draft so far was looked up exactly once, in batches
+        names = {c for p in st["picks"] for c in p["available"]}
+        assert set(client.lookups) == names
+        assert len(client.lookups) == len(names)
+        assert client.batches <= 3
+        assert st["card_errors"] == []
+
+        status, headers, body = _get(s.url + "img/id-mom.jpg")
+        assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
+        with pytest.raises(urllib.error.HTTPError):
+            _get(s.url + "img/../cards.sqlite")
+    finally:
+        s.stop()
 
 
 def test_new_draft_file_resets_state(server):

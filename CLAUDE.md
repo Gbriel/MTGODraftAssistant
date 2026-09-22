@@ -66,8 +66,14 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   `web/` (single page, no build step), `__main__.py` CLI, `config.py`.
 - **M2 done** — `analysis.py`: wheel diffs and in-flight packs. Pod size from
   `Players:`, pack size derived per pack from the first block seen.
+- **Card colours + images done** — `scryfall.py`: lazy per-card lookup as
+  names appear in the log, throttled to one request per 100ms, cached forever
+  in `data/cache/cards.sqlite` with small JPEGs in `data/cache/images/`. No
+  bulk download, nothing large held in memory. `--no-cards` runs offline.
+  UI shows colour-coded cells (black text) grouped W U B R G / multi /
+  colourless / land, images on the pack on screen, hover preview elsewhere.
 - Tests: `test_replay.py`, `test_watcher.py`, `test_analysis.py`,
-  `test_server.py` — all passing.
+  `test_scryfall.py`, `test_server.py` — all passing, no network needed.
 - **Next: M3** pool tracker (needs a cube list). Then M4 17Lands. M5 match logs
   last, after re-verifying the format.
 

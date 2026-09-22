@@ -11,8 +11,11 @@ import argparse
 import sys
 import webbrowser
 
-from .config import ConfigError, resolve_log_dir
+from .config import REPO_ROOT, ConfigError, resolve_log_dir
+from .scryfall import CardResolver
 from .server import DraftServer
+
+DEFAULT_CACHE_DIR = REPO_ROOT / "data" / "cache"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--interval", type=float, default=0.5, help="poll interval in seconds")
     ap.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
+    ap.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR),
+                    help="where Scryfall card data and images are cached")
+    ap.add_argument("--no-cards", action="store_true",
+                    help="offline mode: no Scryfall lookups, text-only cards")
     ap.add_argument("--verbose", action="store_true", help="log HTTP requests")
     args = ap.parse_args(argv)
 
@@ -35,10 +42,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warning: {log_dir} does not exist yet; waiting for MTGO to create it",
               file=sys.stderr)
 
+    resolver = None if args.no_cards else CardResolver(args.cache_dir)
     server = DraftServer(log_dir, host=args.host, port=args.port,
-                         interval=args.interval, verbose=args.verbose)
+                         interval=args.interval, verbose=args.verbose, resolver=resolver)
     server.start()
     print(f"MTGO Draft Assistant watching {log_dir}", flush=True)
+    if resolver is not None:
+        print(f"Card data cached in {args.cache_dir}", flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)

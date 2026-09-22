@@ -9,6 +9,7 @@ a framework wouldn't earn its place here.
     GET /static/<f>  -> web/<f>
     GET /api/state   -> current state as JSON
     GET /events      -> text/event-stream; one ``state`` event per change
+    GET /img/<f>     -> cached Scryfall small image
 """
 
 from __future__ import annotations
@@ -24,17 +25,31 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
+from .scryfall import CardInfo, CardResolver
 from .watcher import DraftWatcher, Update
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 SSE_KEEPALIVE_SECONDS = 15.0
+CARD_PUSH_DEBOUNCE_SECONDS = 0.3
+
+
+def draft_card_names(update: Update) -> list[str]:
+    """Every distinct card name that has appeared in this draft, in order."""
+    seen: dict[str, None] = {}
+    for p in update.draft.picks:
+        for c in p.available:
+            seen.setdefault(c, None)
+    return list(seen)
 
 
 # -- state -------------------------------------------------------------------
 
 
 def build_state(update: Update | None, analysis: Analysis | None,
-                log_dir: Path, version: int) -> dict:
+                log_dir: Path, version: int,
+                cards: dict[str, CardInfo] | None = None,
+                cards_pending: int = 0,
+                card_errors: list[str] | None = None) -> dict:
     """JSON-serialisable view of everything the UI needs."""
     base = {
         "version": version,
@@ -48,6 +63,9 @@ def build_state(update: Update | None, analysis: Analysis | None,
         "wheels": [],
         "in_flight": [],
         "warnings": [],
+        "cards": {name: info.to_json() for name, info in (cards or {}).items()},
+        "cards_pending": cards_pending,
+        "card_errors": list(card_errors or []),
     }
     if update is None or analysis is None:
         return base
@@ -151,6 +169,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.server.store.get())
         elif path == "/events":
             self._sse()
+        elif path.startswith("/img/"):
+            self._image(path[len("/img/"):])
         else:
             self._error(HTTPStatus.NOT_FOUND, "not found")
 
@@ -190,6 +210,28 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._file(target)
 
+    def _image(self, rel: str) -> None:
+        image_dir = self.server.image_dir
+        if image_dir is None:
+            self._error(HTTPStatus.NOT_FOUND, "images disabled")
+            return
+        target = (image_dir / rel).resolve()
+        if image_dir.resolve() not in target.parents or not target.is_file():
+            self._error(HTTPStatus.NOT_FOUND, "not found")
+            return
+        try:
+            body = target.read_bytes()
+        except OSError:
+            self._error(HTTPStatus.NOT_FOUND, "not found")
+            return
+        # Image files are keyed by Scryfall id, so their content never changes.
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "public, max-age=604800, immutable")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _sse(self) -> None:
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -219,27 +261,43 @@ class DraftHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], store: StateStore, verbose: bool = False) -> None:
+    def __init__(self, address: tuple[str, int], store: StateStore, verbose: bool = False,
+                 image_dir: Path | None = None) -> None:
         super().__init__(address, Handler)
         self.store = store
         self.verbose = verbose
+        self.image_dir = image_dir
 
 
 # -- orchestration -----------------------------------------------------------
 
 
 class DraftServer:
-    """Watcher thread + HTTP server thread sharing a StateStore."""
+    """
+    Watcher thread + HTTP server thread sharing a StateStore, plus an optional
+    :class:`CardResolver` that fills in colours and images in the background.
+    Pass ``resolver=None`` for a text-only server (tests, offline use).
+    """
 
     def __init__(self, log_dir: str | Path, host: str = "127.0.0.1", port: int = 8765,
-                 interval: float = 0.5, verbose: bool = False) -> None:
+                 interval: float = 0.5, verbose: bool = False,
+                 resolver: CardResolver | None = None) -> None:
         self.log_dir = Path(log_dir)
         self.interval = interval
+        self.resolver = resolver
+        if resolver is not None:
+            resolver.on_change = self._on_cards_changed
         self.store = StateStore(build_state(None, None, self.log_dir, 0))
         self.watcher = DraftWatcher(self.log_dir, interval=interval)
-        self.httpd = DraftHTTPServer((host, port), self.store, verbose=verbose)
+        self.httpd = DraftHTTPServer(
+            (host, port), self.store, verbose=verbose,
+            image_dir=resolver.image_dir if resolver else None,
+        )
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        self._last: tuple[Update, Analysis] | None = None
+        self._last_lock = threading.Lock()
+        self._card_timer: threading.Timer | None = None
 
     @property
     def host(self) -> str:
@@ -253,11 +311,46 @@ class DraftServer:
     def url(self) -> str:
         return f"http://{self.host}:{self.port}/"
 
+    def _publish(self, update: Update, analysis: Analysis) -> None:
+        cards: dict[str, CardInfo] = {}
+        pending = 0
+        errors: list[str] = []
+        if self.resolver is not None:
+            names = draft_card_names(update)
+            self.resolver.request(names)
+            cards = self.resolver.lookup(names)
+            pending = self.resolver.pending
+            errors = self.resolver.errors[-5:]
+        self.store.set(build_state(
+            update, analysis, self.log_dir, self.store.version + 1,
+            cards=cards, cards_pending=pending, card_errors=errors,
+        ))
+
     def _on_update(self, update: Update) -> None:
         analysis = analyse(update.draft)
-        self.store.set(build_state(update, analysis, self.log_dir, self.store.version + 1))
+        with self._last_lock:
+            self._last = (update, analysis)
+        self._publish(update, analysis)
+
+    def _on_cards_changed(self) -> None:
+        """Called from the resolver thread per card; coalesce into one push."""
+        with self._last_lock:
+            if self._card_timer is not None:
+                return
+            self._card_timer = threading.Timer(CARD_PUSH_DEBOUNCE_SECONDS, self._republish)
+            self._card_timer.daemon = True
+            self._card_timer.start()
+
+    def _republish(self) -> None:
+        with self._last_lock:
+            self._card_timer = None
+            last = self._last
+        if last is not None and not self._stop.is_set():
+            self._publish(*last)
 
     def start(self) -> None:
+        if self.resolver is not None:
+            self.resolver.start()
         # Prime synchronously so the first page load has data.
         first = self.watcher.poll()
         if first is not None:
@@ -276,11 +369,16 @@ class DraftServer:
 
     def stop(self) -> None:
         self._stop.set()
+        with self._last_lock:
+            if self._card_timer is not None:
+                self._card_timer.cancel()
         self.store.close()
         self.httpd.shutdown()
         self.httpd.server_close()
         for t in self._threads:
             t.join(timeout=2)
+        if self.resolver is not None:
+            self.resolver.stop()
 
     def wait(self) -> None:
         """Block the main thread until interrupted."""
