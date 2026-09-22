@@ -290,7 +290,7 @@
       note.appendChild(row);
     }
 
-    for (const c of cur.cards) list.appendChild(tile(c, "lg"));
+    for (const c of cur.cards) list.appendChild(tile(c, "sm"));
   }
 
   // ------------------------------------------------------------- upcoming
