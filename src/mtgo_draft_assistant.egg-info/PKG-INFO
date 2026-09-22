@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: mtgo-draft-assistant
+Version: 0.1.0
+Summary: Live, read-only draft tracker for Magic Online cube drafts
+Requires-Python: >=3.11

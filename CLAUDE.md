@@ -40,13 +40,36 @@ obvious reading of the format is correct.
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
+pip install -e .                # makes `python -m mtgo_draft_assistant` work
 pytest                          # replay tests must pass
+```
+
+Then, with `config.toml` holding `log_dir` (copy `config.example.toml`):
+
+```bash
+python -m mtgo_draft_assistant                 # opens http://127.0.0.1:8765/
+python -m mtgo_draft_assistant --log-dir C:\path --port 8765 --no-browser
+```
+
+To watch the UI update without being in a draft, replay the fixtures into an
+empty scratch directory and point the server at it:
+
+```bash
+python tools/replay.py --dest C:\some\empty\dir --delay 3
+python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
 ```
 
 ## Status
 
-- `src/mtgo_draft_assistant/draft_log.py` — parser, written and verified
-- `tests/test_replay.py` — live-tailing regression suite, passing
-- Everything else in `DESIGN.md` §4 — not started. Milestones in §5.
+- **M1 done** — `watcher.py` (poll by size+mtime, newest `.txt` wins),
+  `server.py` (stdlib `http.server`, JSON at `/api/state`, SSE at `/events`),
+  `web/` (single page, no build step), `__main__.py` CLI, `config.py`.
+- **M2 done** — `analysis.py`: wheel diffs and in-flight packs. Pod size from
+  `Players:`, pack size derived per pack from the first block seen.
+- Tests: `test_replay.py`, `test_watcher.py`, `test_analysis.py`,
+  `test_server.py` — all passing.
+- **Next: M3** pool tracker (needs a cube list). Then M4 17Lands. M5 match logs
+  last, after re-verifying the format.
 
-Start at M1. Don't skip ahead to 17Lands or match logs.
+The server is stdlib on purpose (one page, one stream, one local client); a
+framework has not earned its place yet. Revisit if the API grows.

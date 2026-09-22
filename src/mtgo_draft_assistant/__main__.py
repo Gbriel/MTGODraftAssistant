@@ -38,8 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose)
     server.start()
-    print(f"MTGO Draft Assistant watching {log_dir}")
-    print(f"Open {server.url}  (Ctrl+C to stop)")
+    print(f"MTGO Draft Assistant watching {log_dir}", flush=True)
+    print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)
     try:

@@ -226,23 +226,26 @@ opponent's record prominently. Opponent names come out of the match log.
 
 ## 4. Architecture
 
-Assumed unless overridden: **Python 3.11+, local web UI.** (The user was offered
-overlay/web/TUI and didn't pick; web is the recommended default — fastest to
-build, easiest to iterate, no Windows GUI toolkit pain. Revisit if they want it
-pinned over the MTGO window.)
+**Python 3.11+, local web UI in a browser tab.** Decided 2026-09-21: the user
+picked browser tab over an always-on-top overlay or TUI, and a **stdlib
+`http.server`** over FastAPI (one page, one SSE stream, one local client; no
+dependency has earned its place yet).
 
 ```
 src/mtgo_draft_assistant/
     draft_log.py     # parser — WRITTEN AND TESTED, see tests/
-    watcher.py       # poll the draft dir, emit state on change
-    analysis.py      # wheel diff, in-flight, pool state
+    watcher.py       # poll the draft dir, emit state on change — DONE (M1)
+    analysis.py      # wheel diff, in-flight — DONE (M2); pool state — M3
+    config.py        # log_dir resolution: --log-dir > env > config.toml — DONE
+    server.py        # stdlib http.server: UI, /api/state JSON, /events SSE — DONE
+    __main__.py      # CLI entry point — DONE
     ratings.py       # 17Lands fetch + disk cache + name join
     scryfall.py      # card metadata/images, bulk file cached locally
     matches.py       # P2: match log parsing
     stats.py         # P2: personal WR, pod records
-    server.py        # FastAPI, serves UI + SSE stream
     db.py            # SQLite schema + migrations
-web/                 # static single-page UI, no build step
+web/                 # static single-page UI, no build step — DONE
+tools/replay.py      # feed fixture snapshots into a scratch dir to demo live updates
 ```
 
 **Watching:** poll on a timer (500ms–1s) comparing `(size, mtime)`. Do not use
