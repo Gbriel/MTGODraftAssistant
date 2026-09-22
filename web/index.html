@@ -41,12 +41,13 @@
       <p id="wheels-empty" class="empty">No pack has come back around yet.</p>
     </section>
 
-    <section class="pane" id="pane-picks">
-      <h2>Your picks <span id="pick-count" class="count"></span></h2>
-      <div id="picks"></div>
-      <p id="picks-empty" class="empty">No picks yet.</p>
-    </section>
   </main>
+
+  <details class="pane picks" id="pane-picks">
+    <summary><h2>Your picks <span id="pick-count" class="count"></span><span class="hint">click to expand</span></h2></summary>
+    <div id="picks"></div>
+    <p id="picks-empty" class="empty">No picks yet.</p>
+  </details>
 
   <footer class="foot muted">
     <span id="file"></span>

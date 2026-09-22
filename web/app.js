@@ -1,15 +1,11 @@
 /* MTGO Draft Assistant — client. Listens on /events (SSE) and re-renders.
- * Cards are colour-coded cells (black text) grouped W U B R G, multi,
- * colourless, land; unknown cards are grey until Scryfall data arrives. */
+ * Cards are shown as images in the order MTGO listed them in the pack. A
+ * card with no image yet falls back to its name in a colour-coded cell
+ * (black text; grey until Scryfall data arrives). */
 (function () {
   "use strict";
 
   const $ = (id) => document.getElementById(id);
-  const GROUP_ORDER = ["W", "U", "B", "R", "G", "M", "C", "L", "X"];
-  const GROUP_LABEL = {
-    W: "White", U: "Blue", B: "Black", R: "Red", G: "Green",
-    M: "Multicolor", C: "Colorless", L: "Land", X: "Unknown",
-  };
   let cards = {};              // name -> info from the server
   let lastCommitted = -1;      // to flash the newest pick
 
@@ -24,38 +20,21 @@
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
   function info(name) { return cards[name] || null; }
   function group(name) { const i = info(name); return i ? i.group : "X"; }
-  function cmc(name) { const i = info(name); return i ? i.cmc : 99; }
-
-  function sortCards(names) {
-    return names.slice().sort((a, b) => {
-      const ga = GROUP_ORDER.indexOf(group(a)), gb = GROUP_ORDER.indexOf(group(b));
-      if (ga !== gb) return ga - gb;
-      if (cmc(a) !== cmc(b)) return cmc(a) - cmc(b);
-      return a.localeCompare(b);
-    });
-  }
-  function groupBy(names) {
-    const out = new Map();
-    for (const n of sortCards(names)) {
-      const g = group(n);
-      if (!out.has(g)) out.set(g, []);
-      out.get(g).push(n);
-    }
-    return out;
-  }
   function manaLabel(i) {
     if (!i || !i.mana_cost) return i && i.group === "L" ? "land" : "";
     return i.mana_cost.replace(/[{}]/g, "").replace(/ \/\/ .*/, "");
   }
 
-  // A card cell: the image in a colour-coded frame. Text only appears when
-  // there is no image (not fetched yet, or Scryfall doesn't know the card).
+  // A card cell: the image alone when we have one, otherwise the name in a
+  // colour-coded frame (not fetched yet, or Scryfall doesn't know the card).
   //   size: "lg" for the pack on screen, "sm" everywhere else
   //   extraCls: e.g. "mine" (gold outline), "flash"
   //   title: extra tooltip line (pick position etc.)
   function tile(name, size, extraCls, title) {
     const i = info(name);
-    const t = el("div", `tile ${size} g-${group(name)}` + (extraCls ? " " + extraCls : ""));
+    const hasImg = !!(i && i.image);
+    const t = el("div", `tile ${size} ` + (hasImg ? "has-img" : `g-${group(name)}`)
+      + (extraCls ? " " + extraCls : ""));
     t.dataset.card = name;
     const showName = () => {
       if (!t.querySelector(".name")) {
@@ -63,12 +42,17 @@
         if (i && (i.mana_cost || i.group === "L")) t.appendChild(el("div", "meta", manaLabel(i)));
       }
     };
-    if (i && i.image) {
+    if (hasImg) {
       const img = el("img");
       img.src = i.image;
       img.alt = name;
       img.loading = "lazy";
-      img.onerror = () => { img.remove(); showName(); };
+      img.onerror = () => {
+        img.remove();
+        t.classList.remove("has-img");
+        t.classList.add(`g-${group(name)}`);
+        showName();
+      };
       t.appendChild(img);
     } else {
       showName();
@@ -79,9 +63,10 @@
     t.title = lines.join("\n");
     return t;
   }
+  // names are rendered in the order given, i.e. as MTGO listed them
   function tileRow(names, extraCls, titleFor) {
     const row = el("div", "tilerow");
-    for (const n of sortCards(names)) row.appendChild(tile(n, "sm", extraCls, titleFor && titleFor(n)));
+    for (const n of names) row.appendChild(tile(n, "sm", extraCls, titleFor && titleFor(n)));
     return row;
   }
 
@@ -150,11 +135,11 @@
       const row = el("div", "tilerow");
       row.appendChild(tile(wheel.your_pick, "sm", "mine", "your pick"));
       row.appendChild(el("span", "sep"));
-      for (const n of sortCards(wheel.taken)) row.appendChild(tile(n, "sm", "", "taken by the pod"));
+      for (const n of wheel.taken) row.appendChild(tile(n, "sm", "", "taken by the pod"));
       note.appendChild(row);
     }
 
-    for (const c of sortCards(cur.cards)) list.appendChild(tile(c, "lg"));
+    for (const c of cur.cards) list.appendChild(tile(c, "lg"));
   }
 
   // ------------------------------------------------------------ in flight
@@ -174,7 +159,7 @@
       const row = el("div", "tilerow");
       row.appendChild(tile(f.your_pick, "sm", "mine", "your pick"));
       row.appendChild(el("span", "sep"));
-      for (const n of sortCards(f.passed)) row.appendChild(tile(n, "sm", "", "passed on"));
+      for (const n of f.passed) row.appendChild(tile(n, "sm", "", "passed on"));
       b.appendChild(row);
       box.appendChild(b);
     }
@@ -216,17 +201,29 @@
     lastCommitted = done.length;
     const newest = done.length ? done[done.length - 1].picked : null;
 
-    const byName = new Map(done.map((p) => [p.picked, p]));
-    for (const [g, names] of groupBy(done.map((p) => p.picked))) {
-      box.appendChild(el("div", "group-head", `${GROUP_LABEL[g]} · ${names.length}`));
+    // one row per pack, in pick order
+    const byPack = new Map();
+    for (const p of done) {
+      if (!byPack.has(p.pack)) byPack.set(p.pack, []);
+      byPack.get(p.pack).push(p);
+    }
+    for (const [pack, picks] of byPack) {
+      box.appendChild(el("div", "group-head", `Pack ${pack} · ${picks.length}`));
       const row = el("div", "tilerow");
-      for (const n of names) {
-        const p = byName.get(n);
-        row.appendChild(tile(n, "sm", flashNew && n === newest ? "flash" : "", `picked ${pos(p.pack, p.pick)}`));
+      for (const p of picks) {
+        row.appendChild(tile(p.picked, "sm", flashNew && p.picked === newest ? "flash" : "",
+          `picked ${pos(p.pack, p.pick)}`));
       }
       box.appendChild(row);
     }
   }
+
+  // remember whether the picks drawer was left open
+  const picksPane = $("pane-picks");
+  try { picksPane.open = localStorage.getItem("picksOpen") === "1"; } catch (e) { /* ignore */ }
+  picksPane.addEventListener("toggle", () => {
+    try { localStorage.setItem("picksOpen", picksPane.open ? "1" : "0"); } catch (e) { /* ignore */ }
+  });
 
   function render(st) {
     cards = st.cards || {};

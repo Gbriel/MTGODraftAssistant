@@ -89,15 +89,24 @@ body {
   white-space: pre-wrap;
 }
 
-/* grid: current pack gets the wide column */
+/* grid: current pack gets the wide column; picks sit below, collapsed */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
   margin-top: 12px;
 }
-@media (max-width: 1200px) { .grid { grid-template-columns: 1fr 1fr; } .pane-wide { grid-column: 1 / -1; } }
-@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+details.picks { margin-top: 16px; min-height: 0; }
+details.picks summary { cursor: pointer; list-style: none; }
+details.picks summary::-webkit-details-marker { display: none; }
+details.picks summary h2 { margin: 0; }
+details.picks summary h2::before { content: "▸"; margin-right: 6px; }
+details.picks[open] summary h2::before { content: "▾"; }
+details.picks[open] summary h2 { margin-bottom: 10px; }
+details.picks .hint { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12px; }
+details.picks[open] .hint { display: none; }
 
 .pane {
   background: var(--pane);
@@ -158,6 +167,8 @@ body {
 }
 .tile.lg { width: 100%; }
 .tile.sm { width: 72px; flex: 0 0 auto; padding: 2px; border-radius: 4px; }
+/* with an image there is nothing to frame: the card is its own colour */
+.tile.has-img { background: none; border: none; padding: 0; }
 .tile img {
   width: 100%;
   aspect-ratio: 146 / 204;
@@ -165,6 +176,7 @@ body {
   display: block;
   background: rgba(0,0,0,.08);
 }
+.tile.lg img { border-radius: 6px; }
 .tile .name {
   font-weight: 600;
   line-height: 1.2;
