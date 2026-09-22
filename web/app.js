@@ -63,6 +63,14 @@
     t.title = lines.join("\n");
     return t;
   }
+  // "Your previous pick: <card>", set apart from the rest of the row
+  function prevPick(name) {
+    const box = el("div", "prev");
+    box.appendChild(el("div", "prev-label", "Your previous pick:"));
+    box.appendChild(tile(name, "sm", "mine", "your pick from this pack"));
+    return box;
+  }
+
   // names are rendered in the order given, i.e. as MTGO listed them
   function tileRow(names, extraCls, titleFor) {
     const row = el("div", "tilerow");
@@ -274,12 +282,11 @@
       note.hidden = false;
       const head = el("div");
       head.appendChild(el("span", "pos", pos(wheel.pack, wheel.first_pick)));
-      head.appendChild(document.createTextNode(` came back. You took the outlined card; the pod took ${wheel.taken.length}.`));
+      head.appendChild(document.createTextNode(` came back. The pod took ${wheel.taken.length}:`));
       note.appendChild(head);
       const row = el("div", "tilerow");
-      row.appendChild(tile(wheel.your_pick, "sm", "mine", "your pick"));
-      row.appendChild(el("span", "sep"));
-      for (const n of wheel.taken) row.appendChild(tile(n, "sm", "", "taken by the pod"));
+      row.appendChild(prevPick(wheel.your_pick));
+      for (const n of wheel.taken) row.appendChild(tile(n, "sm", "gone", "taken by the pod"));
       note.appendChild(row);
     }
 
@@ -325,8 +332,7 @@
         `your ${pos(f.pack, f.first_pick)} pack · ${remaining} of these ${f.passed.length} will be left`));
       b.appendChild(h);
       const row = el("div", "tilerow");
-      row.appendChild(tile(f.your_pick, "sm", "mine", "your pick"));
-      row.appendChild(el("span", "sep"));
+      row.appendChild(prevPick(f.your_pick));
       for (const c of f.passed) row.appendChild(tile(c, "sm", "", "passed on"));
       b.appendChild(row);
       box.appendChild(b);
@@ -350,8 +356,7 @@
       // one wrapping row: your pick (gold), then the pack you passed in its
       // original order, with a red X over every card that did not come back
       const row = el("div", "tilerow");
-      row.appendChild(tile(w.your_pick, "sm", "mine", "your pick"));
-      row.appendChild(el("span", "sep"));
+      row.appendChild(prevPick(w.your_pick));
       const back = new Set(w.returned);
       for (const n of w.passed) {
         row.appendChild(back.has(n)

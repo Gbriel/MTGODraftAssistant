@@ -233,6 +233,22 @@ details.picks[open] .hint { display: none; }
 }
 .tilerow { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; align-items: flex-start; }
 .tilerow .sep { width: 8px; }
+.prev {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 10px 3px 4px;
+  margin-right: 8px;
+  border-right: 2px solid var(--line);
+}
+.prev-label {
+  font-size: 9.5px;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--mine);
+  max-width: 66px;
+}
 .tilerow .label { margin: 0; align-self: center; }
 
 .legend { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; display: inline-flex; gap: 10px; align-items: center; }
