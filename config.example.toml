@@ -1,0 +1,4 @@
+# Copy to config.toml (gitignored) and set the path you entered in
+# MTGO: Settings -> "Save Draft Log". Backslashes need doubling in TOML,
+# or use forward slashes.
+log_dir = "C:/Users/you/MTGODraftLogs"
