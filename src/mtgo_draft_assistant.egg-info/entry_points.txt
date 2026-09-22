@@ -1,2 +1,0 @@
-[console_scripts]
-mtgo-draft-assistant = mtgo_draft_assistant.__main__:main
