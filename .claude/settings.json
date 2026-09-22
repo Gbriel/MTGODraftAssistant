@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+
+    "additionalDirectories": [
+      "//c/Users/kopit/MTGODraftLogs",
+      "//c/Users/kopit/AppData/Local/Apps/2.0"
+    ],
+
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(py:*)",
+      "Bash(pip:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(uvicorn:*)",
+
+      "Bash(ls:*)",
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(type:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(findstr:*)",
+      "Bash(where:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(copy:*)",
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(git init:*)",
+
+      "Read(//c/Users/kopit/MTGODraftLogs/**)",
+      "Read(//c/Users/kopit/AppData/Local/Apps/2.0/**)",
+
+      "WebFetch(domain:www.17lands.com)",
+      "WebFetch(domain:17lands.com)",
+      "WebFetch(domain:api.scryfall.com)",
+      "WebFetch(domain:scryfall.com)",
+      "WebFetch(domain:cubecobra.com)",
+      "WebSearch"
+    ],
+
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(del /s:*)",
+
+      "Edit(//c/Users/kopit/MTGODraftLogs/**)",
+      "Write(//c/Users/kopit/MTGODraftLogs/**)",
+      "Edit(//c/Users/kopit/AppData/**)",
+      "Write(//c/Users/kopit/AppData/**)",
+
+      "Read(~/.ssh/**)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}

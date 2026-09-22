@@ -1,0 +1,305 @@
+Event #: 11053
+Time:    9/21/2026 4:07:52 PM
+Players:
+    Grog_MTG
+--> Wumpwumpwump
+    Jed_Davies
+    Quazaar
+    MN64
+    Archer365
+    Geostigma
+    citron_espoir
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 1:
+    Mother of Runes
+    Dark Ritual
+    Loran of the Third Path
+    Faerie Mastermind
+    Sheoldred's Edict
+--> Broadside Bombardiers
+    Elvish Mystic
+    Talisman of Curiosity
+    Damn
+    Dack Fayden
+    Wastewood Verge
+    Arena of Glory
+    Bolas's Citadel
+    Loot, the Pathfinder
+    Tamiyo, Collector of Tales
+
+Picked: Broadside Bombardiers
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Path to Exile
+    Echo of Eons
+    Night Nurse, Healer of Heroes
+    Gitaxian Probe
+    Toxic Deluge
+    Fanatic of Rhonas
+    Tezzeret, Cruel Captain
+    Erode
+    Fallen Shinobi
+    Witherbloom Apprentice
+    Bloodbraid Challenger
+    Displacer Kitten
+    Phyrexian Dragon Engine
+--> Tropical Island
+
+Picked: Tropical Island
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Mishra's Workshop
+    Skyclave Apparition
+    Mystic Confluence
+    Cut Down
+    Galvanic Discharge
+    Noble Hierarch
+    Chromatic Star
+    Meticulous Archive
+--> Bloodstained Mire
+    Manamorphose
+    Jace, Wielder of Mysteries
+    Thespian's Stage
+    Knight of the Reliquary
+
+Picked: Bloodstained Mire
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Chain Lightning
+    Show and Tell
+    The Wandering Emperor
+    Quantum Riddler
+    Pest Infestation
+--> Currency Converter
+    Raffine's Tower
+    Shelldock Isle
+    Carnage Interpreter
+    Oliphaunt
+    Urborg, Tomb of Yawgmoth
+    Figure of Fable
+
+Picked: Currency Converter
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Green Sun's Zenith
+    Council's Judgment
+    Robber of the Rich
+--> Titania, Protector of Argoth
+    Nettlecyst
+    Tidehollow Sculler
+    Traumatic Critique
+    Sunbaked Canyon
+    Sewer-veillance Cam
+    Dark Depths
+    Mutagen Man, Living Ooze
+
+Picked: Titania, Protector of Argoth
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Ledger Shredder
+    Dragon's Rage Channeler
+--> Icetill Explorer
+    Ugin, Eye of the Storms
+    Hallowed Fountain
+    Lórien Revealed
+    Badlands
+    Etali, Primal Conqueror
+    Smuggler's Copter
+    Yavimaya, Cradle of Growth
+
+Picked: Icetill Explorer
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Llanowar Elves
+    Glimmer Lens
+--> Tersa Lightshatter
+    Retrofitter Foundry
+    Wan Shi Tong, Librarian
+    Thornspire Verge
+    Thopter Foundry
+    Iron Man Armor
+    Sandstorm Salvager
+
+Picked: Tersa Lightshatter
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Lose Focus
+--> Ignoble Hierarch
+    King T'Challa
+    Lutri, the Spellchaser
+    Figure of Destiny
+    Goblin Engineer
+    Squee, Goblin Nabob
+    Arwen, Mortal Queen
+
+Picked: Ignoble Hierarch
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Loran of the Third Path
+    Faerie Mastermind
+    Talisman of Curiosity
+    Damn
+--> Arena of Glory
+    Loot, the Pathfinder
+    Tamiyo, Collector of Tales
+
+Picked: Arena of Glory
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Echo of Eons
+    Night Nurse, Healer of Heroes
+    Fanatic of Rhonas
+--> Bloodbraid Challenger
+    Displacer Kitten
+    Phyrexian Dragon Engine
+
+Picked: Bloodbraid Challenger
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Skyclave Apparition
+--> Galvanic Discharge
+    Chromatic Star
+    Meticulous Archive
+    Knight of the Reliquary
+
+Picked: Galvanic Discharge
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Carnage Interpreter
+--> Oliphaunt
+    Urborg, Tomb of Yawgmoth
+    Figure of Fable
+
+Picked: Oliphaunt
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Council's Judgment
+--> Robber of the Rich
+    Mutagen Man, Living Ooze
+
+Picked: Robber of the Rich
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+--> Ledger Shredder
+    Ugin, Eye of the Storms
+
+Picked: Ledger Shredder
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+--> Glimmer Lens
+
+Picked: Glimmer Lens
+
+Pack 2 pick 1:
+    Mana Vault
+    Black Lotus
+    Guide of Souls
+    Brazen Borrower
+    Reanimate
+    Voldaren Epicure
+    Birds of Paradise
+--> Sol Ring
+    Celestial Colonnade
+    Xander's Lounge
+    Underground Mortuary
+    Wooded Foothills
+    Wan Shi Tong, All-Knowing
+    Leovold, Emissary of Trest
+    Shifting Woodland
+
+Picked: Sol Ring
+
+Pack 2 pick 2:
+    Fireblast
+    Timetwister
+    Subtlety
+    Infernal Grasp
+    Magda, Brazen Outlaw
+    Sylvan Caryatid
+    Mind Stone
+    Sunfall
+    Thieving Skydiver
+    Kolaghan's Command
+    Savai Triome
+--> Phyrexian Metamorph
+    Caustic Bronco
+    Lush Portico
+
+Picked: Phyrexian Metamorph
+
+Pack 2 pick 2:
+    City of Traitors
+--> Strip Mine
+    Spell Pierce
+    Duress
+    Inti, Seneschal of the Sun
+    Expedition Map
+    Sage of the Skies
+    Spirebluff Canal
+    Deathrite Shaman
+    Otharri, Suns' Glory
+    Multiversal Passage
+    Anger
+    Haywire Mite
+
+Picked: Strip Mine
+
+Pack 2 pick 2:
+--> Lightning Bolt
+    Yawgmoth's Will
+    Treasure Cruise
+    Nethergoyf
+    Tarfire
+    Relic of Sauron
+    Aang, Swift Savior
+    Volcanic Island
+    Tear Asunder
+    Thor, God of Thunder
+    Thassa's Oracle
+    Harvester of Misery
+
+Picked: Lightning Bolt
+
+Pack 2 pick 2:
+    Containment Priest
+    Tendrils of Agony
+    Winds of Abandon
+    Spellseeker
+    Emperor of Bones
+    Ivora, Insatiable Heir
+    Scrubland
+    Steam Vents
+    Fire Covenant
+    Painter's Servant
+    Hedge Maze
+
