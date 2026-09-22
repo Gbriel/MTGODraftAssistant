@@ -178,13 +178,17 @@
       head.appendChild(el("span", "pos", `${pos(w.pack, w.first_pick)} → ${pos(w.pack, w.return_pick)}`));
       head.appendChild(el("span", "muted", `pod took ${w.taken.length} · ${w.returned.length} came back`));
       b.appendChild(head);
-      // one wrapping row: your pick (gold), what the pod took, what came back (green)
+      // one wrapping row: your pick (gold), then the pack you passed in its
+      // original order, with a red X over every card that did not come back
       const row = el("div", "tilerow");
       row.appendChild(tile(w.your_pick, "sm", "mine", "your pick"));
       row.appendChild(el("span", "sep"));
-      for (const n of w.taken) row.appendChild(tile(n, "sm", "", "taken by the pod"));
-      if (w.returned.length) row.appendChild(el("span", "sep"));
-      for (const n of w.returned) row.appendChild(tile(n, "sm", "back", "came back to you"));
+      const back = new Set(w.returned);
+      for (const n of w.passed) {
+        row.appendChild(back.has(n)
+          ? tile(n, "sm", "", "came back to you")
+          : tile(n, "sm", "gone", "taken by the pod"));
+      }
       b.appendChild(row);
       if (w.warning) b.appendChild(el("div", "warn", w.warning));
       box.appendChild(b);

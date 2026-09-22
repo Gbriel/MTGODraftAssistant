@@ -156,7 +156,8 @@ details.picks[open] .hint { display: none; }
 .legend { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; display: inline-flex; gap: 10px; align-items: center; }
 .legend .sw { display: inline-block; width: 9px; height: 12px; border-radius: 2px; background: #555; margin-right: 4px; vertical-align: -2px; }
 .legend .sw.mine { outline: 2px solid var(--mine); }
-.legend .sw.back { outline: 2px solid var(--back); }
+.legend .sw.gone { position: relative; }
+.legend .sw.gone::after { content: "✕"; position: absolute; inset: 0; color: var(--gone); font-size: 12px; line-height: 12px; text-align: center; font-weight: 700; }
 
 .tile {
   color: #111;
@@ -194,7 +195,19 @@ details.picks[open] .hint { display: none; }
 .tile .meta { font-size: 10px; font-family: var(--mono); color: #333; text-align: center; }
 .tile.sm .meta { font-size: 8.5px; }
 .tile.mine { outline: 2px solid var(--mine); outline-offset: 0; }
-.tile.back { outline: 2px solid var(--back); outline-offset: 0; }
+/* taken by the pod: dimmed with a red X across the card */
+.tile.gone { position: relative; }
+.tile.gone img, .tile.gone .name, .tile.gone .meta { opacity: .55; }
+.tile.gone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background:
+    linear-gradient(to top right, transparent calc(50% - 2px), var(--gone) calc(50% - 2px), var(--gone) calc(50% + 2px), transparent calc(50% + 2px)),
+    linear-gradient(to top left,  transparent calc(50% - 2px), var(--gone) calc(50% - 2px), var(--gone) calc(50% + 2px), transparent calc(50% + 2px));
+  pointer-events: none;
+}
 .tile.flash { animation: flash 1.6s ease-out; }
 @keyframes flash {
   from { box-shadow: 0 0 0 4px var(--mine); }
