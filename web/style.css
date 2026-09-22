@@ -92,7 +92,7 @@ body {
 /* grid: current pack gets the wide column; picks sit below, collapsed */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
   gap: 16px;
   margin-top: 12px;
 }
@@ -149,9 +149,14 @@ details.picks[open] .hint { display: none; }
   grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: 8px;
 }
-.tilerow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: flex-start; }
-.tilerow .sep { width: 6px; }
+.tilerow { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; align-items: flex-start; }
+.tilerow .sep { width: 8px; }
 .tilerow .label { margin: 0; align-self: center; }
+
+.legend { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; display: inline-flex; gap: 10px; align-items: center; }
+.legend .sw { display: inline-block; width: 9px; height: 12px; border-radius: 2px; background: #555; margin-right: 4px; vertical-align: -2px; }
+.legend .sw.mine { outline: 2px solid var(--mine); }
+.legend .sw.back { outline: 2px solid var(--back); }
 
 .tile {
   color: #111;
@@ -166,7 +171,7 @@ details.picks[open] .hint { display: none; }
   cursor: default;
 }
 .tile.lg { width: 100%; }
-.tile.sm { width: 72px; flex: 0 0 auto; padding: 2px; border-radius: 4px; }
+.tile.sm { width: 66px; flex: 0 0 auto; padding: 2px; border-radius: 4px; }
 /* with an image there is nothing to frame: the card is its own colour */
 .tile.has-img { background: none; border: none; padding: 0; }
 .tile img {
@@ -189,6 +194,7 @@ details.picks[open] .hint { display: none; }
 .tile .meta { font-size: 10px; font-family: var(--mono); color: #333; text-align: center; }
 .tile.sm .meta { font-size: 8.5px; }
 .tile.mine { outline: 2px solid var(--mine); outline-offset: 0; }
+.tile.back { outline: 2px solid var(--back); outline-offset: 0; }
 .tile.flash { animation: flash 1.6s ease-out; }
 @keyframes flash {
   from { box-shadow: 0 0 0 4px var(--mine); }
@@ -210,17 +216,17 @@ details.picks[open] .hint { display: none; }
 .block {
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
+  padding: 6px 8px 7px;
+  margin-bottom: 6px;
   background: var(--pane-2);
 }
 .block .head {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: baseline;
   flex-wrap: wrap;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
 }
 .block .head .pos { color: var(--accent); font-weight: 600; }
 .block .head .due { color: var(--flight); }

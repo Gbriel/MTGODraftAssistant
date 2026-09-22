@@ -176,15 +176,16 @@
       const b = el("div", "block");
       const head = el("div", "head");
       head.appendChild(el("span", "pos", `${pos(w.pack, w.first_pick)} → ${pos(w.pack, w.return_pick)}`));
+      head.appendChild(el("span", "muted", `pod took ${w.taken.length} · ${w.returned.length} came back`));
       b.appendChild(head);
-      const top = el("div", "tilerow");
-      top.appendChild(tile(w.your_pick, "sm", "mine", "your pick"));
-      top.appendChild(el("span", "sep"));
-      top.appendChild(el("div", "label gone", `pod took ${w.taken.length}`));
-      b.appendChild(top);
-      b.appendChild(tileRow(w.taken, "", () => "taken by the pod"));
-      b.appendChild(el("div", "label back", `came back ${w.returned.length}`));
-      b.appendChild(tileRow(w.returned, "", () => "came back to you"));
+      // one wrapping row: your pick (gold), what the pod took, what came back (green)
+      const row = el("div", "tilerow");
+      row.appendChild(tile(w.your_pick, "sm", "mine", "your pick"));
+      row.appendChild(el("span", "sep"));
+      for (const n of w.taken) row.appendChild(tile(n, "sm", "", "taken by the pod"));
+      if (w.returned.length) row.appendChild(el("span", "sep"));
+      for (const n of w.returned) row.appendChild(tile(n, "sm", "back", "came back to you"));
+      b.appendChild(row);
       if (w.warning) b.appendChild(el("div", "warn", w.warning));
       box.appendChild(b);
     }
