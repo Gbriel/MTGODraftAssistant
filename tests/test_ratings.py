@@ -51,8 +51,8 @@ class FakeClient:
         self.fail = fail
         self.calls: list[tuple] = []
 
-    def fetch(self, expansion, fmt, start_date, end_date):
-        self.calls.append((expansion, fmt, start_date, end_date))
+    def fetch(self, expansion, fmt, time_period="ALL_TIME"):
+        self.calls.append((expansion, fmt, time_period))
         if self.fail:
             raise OSError("network down")
         return list(self.rows)
@@ -151,7 +151,7 @@ def test_provider_fetches_when_no_cache(tmp_path):
         assert changes
     finally:
         p.stop()
-    assert client.calls == [("Cube - Powered", "PremierDraft", "2019-01-01", "2026-09-24")]
+    assert client.calls == [("Cube - Powered", "PremierDraft", "ALL_TIME")]
 
 
 def test_fresh_cache_is_used_without_network(tmp_path):
@@ -219,8 +219,37 @@ def test_empty_response_is_an_error_not_a_dataset(tmp_path):
         p.stop()
 
 
-def test_expansion_is_part_of_the_cache_key(tmp_path):
+def test_expansion_and_period_are_part_of_the_cache_key(tmp_path):
     now = datetime(2026, 9, 24, 12, 0, 0)
     RatingsCache(tmp_path / "ratings.sqlite").put("Cube", "PremierDraft", ROWS, now.isoformat())
     p = RatingsProvider(tmp_path, expansion="Cube - Powered", client=FakeClient(), now=lambda: now)
     assert p.status()["status"] == "empty"
+    RatingsCache(tmp_path / "ratings.sqlite").put("Cube - Powered", "PremierDraft", ROWS, now.isoformat(),
+                                                  time_period="LATEST_EVENT")
+    p2 = RatingsProvider(tmp_path, client=FakeClient(), now=lambda: now)          # ALL_TIME: no hit
+    assert p2.status()["status"] == "empty"
+    p3 = RatingsProvider(tmp_path, client=FakeClient(), now=lambda: now, time_period="LATEST_EVENT")
+    assert p3.status()["status"] == "ok" and p3.status()["time_period"] == "LATEST_EVENT"
+
+
+def test_client_parses_the_wrapped_response(monkeypatch):
+    import io
+    import urllib.request
+    from mtgo_draft_assistant.ratings import RatingsClient
+
+    seen = []
+
+    class Resp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, timeout=0):
+        seen.append(req.full_url)
+        return Resp(b'{"copyright": "x", "notes": "", "data": [{"name": "Pyrogoyf", "ever_drawn_game_count": 77954}]}')
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    rows = RatingsClient(min_interval=0).fetch("Cube - Powered", "PremierDraft", "ALL_TIME")
+    assert rows == [{"name": "Pyrogoyf", "ever_drawn_game_count": 77954}]
+    assert seen[0].startswith("https://www.17lands.com/api/card_data?")
+    assert "event_type=PremierDraft" in seen[0] and "time_period=ALL_TIME" in seen[0]
+    assert "expansion=Cube+-+Powered" in seen[0] or "expansion=Cube%20-%20Powered" in seen[0]

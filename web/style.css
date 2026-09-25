@@ -146,6 +146,8 @@ body {
 }
 .rate .wr { font-weight: 400; opacity: .9; }
 .rate .wr::before { content: "·"; margin-right: 3px; opacity: .6; }
+.rate .alsa-sub { font-weight: 400; opacity: .85; font-size: 8.5px; }
+.rate .alsa-sub::before { content: "·"; margin-right: 3px; opacity: .6; }
 .rate.r-hot { background: rgba(242, 193, 78, .92); color: #1a1400; border-color: rgba(0,0,0,.35); }
 .rate.r-mid { background: rgba(95, 207, 128, .88); color: #05200c; border-color: rgba(0,0,0,.3); }
 .rate.r-low { background: rgba(20, 22, 28, .7); color: #c9cdd8; }

@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
 from .arena_log import ArenaWatcher
+from .auto_watcher import AutoWatcher
 from .config import save_log_dir
 from .cube_list import CubeList, from_names
 from .pool import PoolReport, pool_state
@@ -329,13 +330,20 @@ class DraftServer:
                  ratings: RatingsProvider | None = None,
                  config_path: Path | None = None,
                  allow_config: bool = True,
-                 watcher: DraftWatcher | ArenaWatcher | None = None,
-                 cube: CubeList | None = None) -> None:
+                 watcher: DraftWatcher | ArenaWatcher | AutoWatcher | None = None,
+                 cube: CubeList | None = None,
+                 arena_cube: RatingsProvider | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
+        self.verbose = verbose
         self.resolver = resolver
         self.ratings = ratings
-        self.cube = cube                        # explicit list; else 17Lands's in Arena mode
+        self.cube = cube                        # explicit list; else 17Lands's for Arena drafts
+        # the current cube's card list for Arena drafts: a LATEST_EVENT pull, since the
+        # ALL_TIME ratings include cards from earlier runs; falls back to ``ratings``
+        self.arena_cube = arena_cube
+        if arena_cube is not None:
+            arena_cube.on_change = self._on_cards_changed
         self._cube_from_ratings: CubeList | None = None
         self.config_path = config_path          # None -> default config.toml location
         if resolver is not None:
@@ -345,11 +353,14 @@ class DraftServer:
         if watcher is None:
             watcher = DraftWatcher(self.log_dir, interval=interval)
         self.watcher = watcher
-        self.arena = isinstance(watcher, ArenaWatcher)
+        self.arena = isinstance(watcher, ArenaWatcher)          # Arena only
+        self.auto = isinstance(watcher, AutoWatcher)            # both, follow the latest
         if self.arena:
             watcher.namer = self._arena_name
             self.log_dir = watcher.log_dir
             allow_config = False            # one fixed file; nothing to configure
+        elif self.auto:
+            watcher.arena.namer = self._arena_name
         self.config_locked = not allow_config
         self.store = StateStore(self._idle_state(0))
         self.httpd = DraftHTTPServer(
@@ -379,31 +390,41 @@ class DraftServer:
         meta = self.ratings.status() if self.ratings is not None else None
         return self._decorate(build_state(None, None, self.log_dir, version, ratings_meta=meta))
 
-    def _decorate(self, state: dict) -> dict:
-        state["source"] = "arena" if self.arena else "mtgo"
+    def _decorate(self, state: dict, source: str | None = None) -> dict:
+        if source is None:
+            source = "arena" if self.arena else "auto" if self.auto else "mtgo"
+        state["source"] = source
         state["config_locked"] = self.config_locked
+        state["arena_log"] = str(self.watcher.arena_log) if self.auto else (
+            str(self.watcher.log_path) if self.arena else None)
         return state
+
+    def _active_source(self, update: Update) -> str:
+        return update.draft.source if (self.auto or self.arena) else "mtgo"
 
     def _arena_name(self, grp_id: int) -> str | None:
         """Arena card id -> name: 17Lands first (no network), then Scryfall (cached, async)."""
-        if self.ratings is not None:
-            name = self.ratings.arena_name(grp_id)
-            if name:
-                return name
+        for provider in (self.arena_cube, self.ratings):
+            if provider is not None:
+                name = provider.arena_name(grp_id)
+                if name:
+                    return name
         if self.resolver is not None:
             return self.resolver.arena_name(grp_id)
         return None
 
-    def current_cube(self) -> CubeList | None:
-        """The explicit cube list, or in Arena mode the 17Lands card list."""
+    def current_cube(self, source: str = "mtgo") -> CubeList | None:
+        """The explicit cube list, or for an Arena draft the 17Lands card list."""
         if self.cube is not None:
             return self.cube
-        if self.arena and self.ratings is not None:
-            ds = self.ratings.dataset
+        provider = self.arena_cube or self.ratings
+        if source == "arena" and provider is not None:
+            ds = provider.dataset
             if ds is not None and (self._cube_from_ratings is None
                                    or len(self._cube_from_ratings) != len(ds)
                                    or self._cube_from_ratings.fetched_at != ds.fetched_at):
-                cl = from_names(list(ds.cards), f"17Lands {ds.expansion}")
+                label = f"17Lands {ds.expansion}" + (" current run" if self.arena_cube else "")
+                cl = from_names(list(ds.cards), label)
                 cl.fetched_at = ds.fetched_at
                 self._cube_from_ratings = cl
             return self._cube_from_ratings
@@ -411,7 +432,7 @@ class DraftServer:
 
     def _publish(self, update: Update, analysis: Analysis) -> None:
         names = draft_card_names(update)
-        cube = self.current_cube()
+        cube = self.current_cube(self._active_source(update))
         pool = pool_state(update.draft, analysis, cube)
         cards: dict[str, CardInfo] = {}
         pending = 0
@@ -427,12 +448,14 @@ class DraftServer:
         if self.ratings is not None:
             ratings, unmatched = self.ratings.lookup(names)
             meta = self.ratings.status()
+        source = self._active_source(update)
+        log_dir = update.path.parent if source == "arena" else self.log_dir
         self.store.set(self._decorate(build_state(
-            update, analysis, self.log_dir, self.store.version + 1,
+            update, analysis, log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=meta, ratings_unmatched=unmatched,
             pool=pool,
-        )))
+        ), source))
 
     def _publish_idle(self) -> None:
         with self._last_lock:
@@ -443,6 +466,13 @@ class DraftServer:
         analysis = analyse(update.draft)
         with self._last_lock:
             self._last = (update, analysis)
+        if self.verbose:
+            d = update.draft
+            live = d.current_pack
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] {d.source} "
+                  f"{'NEW DRAFT ' if update.new_draft else ''}P{analysis.current_pack}P{analysis.current_pick} "
+                  f"{'on screen' if live else 'waiting'} - {sum(p.complete for p in d.picks)} picks, "
+                  f"{len(d.picks)} blocks", flush=True)
         self._publish(update, analysis)
 
     # -- configuration from the UI
@@ -501,7 +531,7 @@ class DraftServer:
         if self._stop.is_set():
             return
         if last is not None:
-            if self.arena:
+            if self.arena or self.auto:
                 # card names may have arrived: re-render the draft from the log
                 rebuilt = self.watcher.rebuild()
                 if rebuilt is not None:
@@ -517,6 +547,8 @@ class DraftServer:
             self.resolver.start()
         if self.ratings is not None:
             self.ratings.start()
+        if self.arena_cube is not None:
+            self.arena_cube.start()
         # Prime synchronously so the first page load has data.
         first = self.watcher.poll()
         if first is not None:
@@ -547,6 +579,8 @@ class DraftServer:
             self.resolver.stop()
         if self.ratings is not None:
             self.ratings.stop()
+        if self.arena_cube is not None:
+            self.arena_cube.stop()
 
     def wait(self) -> None:
         """Block the main thread until interrupted."""

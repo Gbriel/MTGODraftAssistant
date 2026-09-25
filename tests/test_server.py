@@ -369,6 +369,41 @@ def test_arena_mode_uses_17lands_list_as_cube(tmp_path):
         s.stop()
 
 
+def test_auto_mode_switches_source_in_state(tmp_path):
+    from datetime import datetime, timedelta
+    from mtgo_draft_assistant.auto_watcher import AutoWatcher
+    from test_auto_watcher import _arena_halves
+
+    first, second, t_first, t_last = _arena_halves()
+    mtgo_dir = tmp_path / "mtgo"
+    mtgo_dir.mkdir()
+    arena = tmp_path / "Player.log"
+    arena.write_bytes(first)
+    _write(mtgo_dir / LOG_NAME, os.path.join(SNAP_DIR, "snap_001_3254b.txt"),
+           (t_first - timedelta(days=1)).timestamp())
+    s = DraftServer(mtgo_dir, port=0, interval=0.05, config_path=tmp_path / "c.toml",
+                    watcher=AutoWatcher(mtgo_dir, arena, interval=0.05))
+    s.start()
+    try:
+        st = json.loads(_get(s.url + "api/state")[2])
+        assert st["source"] == "arena" and st["file"] == "Player.log"
+        assert st["config_locked"] is False and st["arena_log"] == str(arena)
+        assert st["log_dir"] == str(tmp_path)
+
+        _write(mtgo_dir / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"),
+               (t_last + timedelta(minutes=1)).timestamp())
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["source"] == "mtgo":
+                break
+            time.sleep(0.05)
+        assert st["source"] == "mtgo" and st["file"] == LOG_NAME
+        assert st["log_dir"] == str(mtgo_dir) and st["draft"]["hero"] == "Wumpwumpwump"
+    finally:
+        s.stop()
+
+
 def _post(url: str, payload: dict) -> tuple[int, dict]:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",

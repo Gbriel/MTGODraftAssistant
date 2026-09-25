@@ -92,16 +92,16 @@ then. Use `--arena-log PATH` if your log lives somewhere unusual.
 
 [17Lands](https://www.17lands.com) publishes card statistics for the **Arena**
 cube. There is no MTGO data, but the Arena powered cube overlaps the MTGO
-Vintage Cube heavily, so the tool downloads the `Cube - Powered` ratings once a
-day (about 350KB, cached in `data/cache/`) and joins them by card name.
+Vintage Cube heavily, so the tool downloads the `Cube - Powered` all-time card
+data once a day (about 650KB, cached in `data/cache/`) and joins it by card
+name. The numbers are the same ones the 17Lands Card Data page shows.
 
-Each card gets a small badge with its **ALSA** (average last-seen-at: the pick at
-which the Arena pod, on average, last saw the card before someone took it).
-Low is good: 1.5 means it goes first pick, 9 means it wheels. Gold means the
-top of the cube, green the next tier. When 17Lands has 500 or more games for a
-card, its **GIH WR** (games-in-hand win rate) appears next to the ALSA. Below
-500 games 17Lands publishes no win rate at all, and early in a cube run that is
-most cards. Hover a card for the full numbers, including the game count.
+Each card gets a small badge: its **GIH WR** (games-in-hand win rate: how often
+decks won when they had the card in hand at some point), then its **ALSA**
+(average last-seen-at: the pick at which the pod, on average, last saw the card
+before someone took it; 1.5 means first-picked, 9 means it wheels). Gold marks
+the top of the cube by GIH WR, green the next tier. Hover a card for the rest,
+including the game counts. A card with fewer than 500 games shows no win rate.
 
 The line under the header says how many cards the dataset has, how many have a
 win rate, and how many cards you have seen this draft have no Arena data at all
@@ -109,8 +109,15 @@ win rate, and how many cards you have seen this draft have no Arena data at all
 
 Run with `--no-ratings` to skip this, or set `enabled = false` under
 `[ratings]` in `config.toml`; the same table can pick another expansion
-(`"Cube"` is the unpowered Arena cube), format, refresh interval or game
-threshold. See `config.example.toml`.
+(`"Cube"` is the unpowered Arena cube), format, time period, refresh interval
+or game threshold. See `config.example.toml`.
+
+**A note on terms.** The endpoint that serves these numbers is the one the
+17Lands website uses for its own pages, and its response carries a notice that
+the data is for use on 17Lands.com, with their public datasets offered for
+outside use. This tool reads it once a day for one person's private screen;
+whether that is acceptable to you is your decision. `--no-ratings` turns the
+whole feature off.
 
 ## Options
 

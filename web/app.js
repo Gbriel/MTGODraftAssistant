@@ -52,16 +52,19 @@
     if (r.play_rate !== null) out.push(`play rate ${fmtPct(r.play_rate, 0)} of decks that had it`);
     return out;
   }
-  // The badge: ALSA, plus GIH WR when 17Lands publishes one. Class by how
-  // early the Arena pod takes it (percentile of ALSA within the dataset).
+  // The badge: GIH WR first (the number that matters), then ALSA. Colour by
+  // the card's GIH WR percentile within the cube, or by ALSA when there is
+  // no win rate yet.
   function ratingBadge(name) {
     const r = ratings[name];
-    if (!r || r.alsa === null) return null;
-    const pct = r.alsa_pct === null ? 50 : r.alsa_pct;
+    if (!r) return null;
+    const hasWr = r.gih_wr !== null && r.gih_wr !== undefined;
+    if (!hasWr && r.alsa === null) return null;
+    const pct = hasWr ? (r.gih_pct === null ? 50 : r.gih_pct) : (r.alsa_pct === null ? 50 : r.alsa_pct);
     const cls = pct >= 85 ? "r-hot" : (pct >= 55 ? "r-mid" : "r-low");
     const b = el("div", `rate ${cls}`);
-    b.appendChild(el("span", "alsa", fmt1(r.alsa)));
-    if (r.gih_wr !== null && r.gih_wr !== undefined) b.appendChild(el("span", "wr", fmtPct(r.gih_wr, 0)));
+    if (hasWr) b.appendChild(el("span", "wr-main", fmtPct(r.gih_wr, 1)));
+    if (r.alsa !== null) b.appendChild(el("span", hasWr ? "alsa-sub" : "alsa", fmt1(r.alsa)));
     return b;
   }
 
@@ -227,7 +230,7 @@
     if (meta.status === "ok") {
       const when = meta.age_hours === null ? "" : (meta.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(meta.age_hours)}h ago`);
       bar.appendChild(el("span", "muted",
-        `${fmtInt(meta.cards)} cards · ${fmtInt(meta.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
+        `${meta.time_period === "ALL_TIME" ? "all time" : meta.time_period} · ${fmtInt(meta.cards)} cards · ${fmtInt(meta.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
       const seen = Object.keys(st.ratings || {}).length + (st.ratings_unmatched || []).length;
       if (seen) {
         const miss = st.ratings_unmatched || [];
@@ -256,14 +259,15 @@
     });
     lab.appendChild(cb);
     lab.appendChild(document.createTextNode("badges"));
-    lab.title = "Badge = ALSA (average pick at which the Arena pod last saw the card; lower = taken earlier)."
-      + "\nA second number is GIH WR, shown only when 17Lands has ≥500 games. Hover a card for the rest.";
+    lab.title = "Badge = GIH WR (games-in-hand win rate: how often decks won when they had the card), "
+      + "then ALSA (average pick at which the pod last saw it; lower = taken earlier).\n"
+      + "Gold = top of the cube by GIH WR, green = next tier. Hover a card for the rest.";
     bar.appendChild(lab);
     const key = el("span", "key");
-    key.appendChild(el("i", "rate r-hot", "1.5"));
-    key.appendChild(document.createTextNode(" taken early "));
-    key.appendChild(el("i", "rate r-low", "9.0"));
-    key.appendChild(document.createTextNode(" wheels"));
+    key.appendChild(el("i", "rate r-hot", "60%"));
+    key.appendChild(document.createTextNode(" top tier "));
+    key.appendChild(el("i", "rate r-low", "52%"));
+    key.appendChild(document.createTextNode(" bottom · then ALSA"));
     bar.appendChild(key);
   }
 
@@ -272,7 +276,7 @@
     const d = st.draft;
     const podNote = { players: "", inferred: " (inferred from wheels)", assumed: " (assumed)", unknown: "" }[d ? d.pod_size_source : "unknown"] || "";
     $("cube").textContent = d
-      ? `${d.set_name || "unknown cube"} · Event ${d.source === "arena" ? (d.event_id || "?").slice(0, 8) : (d.event_id || "?")} · ${d.pod_size || "?"} players${podNote}`
+      ? `${d.source === "arena" ? "Arena" : "MTGO"} · ${d.set_name || "unknown cube"} · Event ${d.source === "arena" ? (d.event_id || "?").slice(0, 8) : (d.event_id || "?")} · ${d.pod_size || "?"} players${podNote}`
       : "";
     const p = st.position;
     const badge = $("position");
@@ -302,6 +306,8 @@
     $("logdir-change").hidden = !!st.config_locked;
     if (st.source === "arena") {
       $("file").textContent = st.file ? `Arena · ${st.log_dir}\\${st.file}` : `Arena · watching ${st.log_dir} — no draft in the log yet`;
+    } else if (st.source === "auto") {
+      $("file").textContent = `watching MTGO ${st.log_dir || "(no folder set)"} and Arena ${st.arena_log} — no draft yet`;
     } else if (!st.log_dir) $("file").textContent = "no draft log folder set";
     else if (!st.log_dir_ok) $("file").textContent = `${st.log_dir} — folder not found`;
     else if (st.file) $("file").textContent = `${st.log_dir}\\${st.file}`;
@@ -318,8 +324,9 @@
   let lastLogDir = null;
 
   function updateLogDirForm(st) {
-    lastLogDir = st.log_dir;
     if (st.config_locked) { form.hidden = true; return; }
+    if (st.source === "arena") { form.hidden = editing ? form.hidden : true; return; }  // showing an Arena draft; MTGO folder still editable via the link
+    lastLogDir = st.log_dir;
     const needed = !st.log_dir || !st.log_dir_ok;
     form.hidden = !(needed || editing);
     $("logdir-cancel").hidden = needed;

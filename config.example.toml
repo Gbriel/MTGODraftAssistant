@@ -16,6 +16,7 @@ list = "https://www.mtgo.com/vintage-cube-cardlist"
 [ratings]
 enabled = true
 expansion = "Cube - Powered"   # "Cube" is the unpowered Arena cube
-format = "PremierDraft"
+format = "PremierDraft"        # 17Lands "event type"; TradDraft also has cube data
+time_period = "ALL_TIME"       # every run of the cube; LATEST_EVENT, LAST_TWO_WEEKS, ... exist
 refresh_hours = 24             # re-download at most this often
-min_games = 500                # hide win rates below this many games (17Lands nulls them anyway)
+min_games = 500                # hide a win rate below this many games in hand

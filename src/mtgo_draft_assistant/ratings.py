@@ -1,21 +1,22 @@
 """
 17Lands card ratings for the Arena cube, fetched once a day and cached on disk.
 
-What 17Lands actually serves for ``Cube - Powered`` (checked 2026-09-24, see
-DESIGN.md §2.4):
+Endpoint (checked 2026-09-25, see DESIGN.md §2.4): the one the 17Lands card
+data page itself calls,
 
-- One flat list of ~540 cards for the *current* Arena cube run. The
-  ``start_date``/``end_date`` parameters are required but do not narrow the
-  cube data; every window returns the same all-time pool for that run.
-- Win-rate fields (``ever_drawn_win_rate`` = GIH WR, ``win_rate`` = GP WR, ...)
-  are ``null`` below 500 games. Cube games are spread thin, so early in a run
-  almost every card is null. Count fields are always populated.
-- ``avg_seen`` (ALSA, average last-seen-at pick) is present for nearly every
-  card and is the one signal that is always usable. Low ALSA = the pod takes
-  it early. ``avg_pick`` (ATA) is mostly null.
+    GET https://www.17lands.com/api/card_data
+        ?expansion=Cube%20-%20Powered&event_type=PremierDraft&time_period=ALL_TIME
 
-So the UI leads with ALSA, shows GIH WR only when 17Lands publishes it, and
-always renders the game count so nobody reads a thin number as a solid one.
+which returns ``{"copyright", "notes", "data": [card, ...]}`` over every run of
+that cube. The older ``/card_ratings/data`` endpoint answers the same card
+schema but only for a short recent slice and ignores its date parameters;
+it made nearly every win rate null. Don't go back to it.
+
+Per card: ``ever_drawn_win_rate`` (GIH WR, the headline), ``win_rate``
+(GP WR), ``opening_hand_win_rate``, ``drawn_improvement_win_rate`` (IWD),
+``avg_seen`` (ALSA), ``avg_pick`` (ATA), and the matching game counts. Win
+rates are null when 17Lands judges the sample too small; the count fields
+are always populated, and the UI always shows the count next to the rate.
 
 Etiquette: one request, serialised, with a User-Agent, backoff on failure,
 cached in SQLite, refreshed at most once per ``refresh_hours``.
@@ -37,13 +38,13 @@ from datetime import datetime
 from pathlib import Path
 
 USER_AGENT = "MTGODraftAssistant/0.1 (local read-only draft tracker)"
-RATINGS_URL = "https://www.17lands.com/card_ratings/data"
+RATINGS_URL = "https://www.17lands.com/api/card_data"
 
 DEFAULT_EXPANSION = "Cube - Powered"    # the powered/Vintage cube; plain "Cube" is unpowered
-DEFAULT_FORMAT = "PremierDraft"
-DEFAULT_START_DATE = "2019-01-01"       # dates don't filter cube data, but must be sent
+DEFAULT_FORMAT = "PremierDraft"         # sent as event_type
+DEFAULT_TIME_PERIOD = "ALL_TIME"        # every run of the cube; LATEST_EVENT etc. also exist
 DEFAULT_REFRESH_HOURS = 24.0
-DEFAULT_MIN_GAMES = 500                 # 17Lands's own null threshold; keep ours no lower
+DEFAULT_MIN_GAMES = 500                 # hide a win rate below this many GIH games
 RETRY_AFTER_FAILURE = 600.0             # seconds before another attempt after an error
 
 
@@ -249,10 +250,9 @@ class RatingsClient:
         self._last = 0.0
         self._lock = threading.Lock()
 
-    def fetch(self, expansion: str, fmt: str, start_date: str, end_date: str) -> list[dict]:
+    def fetch(self, expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD) -> list[dict]:
         url = RATINGS_URL + "?" + urllib.parse.urlencode({
-            "expansion": expansion, "format": fmt,
-            "start_date": start_date, "end_date": end_date,
+            "expansion": expansion, "event_type": fmt, "time_period": time_period,
         })
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
                                                    "Accept": "application/json"})
@@ -274,9 +274,11 @@ class RatingsClient:
                 finally:
                     self._last = time.monotonic()
                 data = json.loads(body)
-                if not isinstance(data, list):
-                    raise ValueError(f"unexpected 17Lands response: {type(data).__name__}")
-                return data
+                if isinstance(data, dict) and isinstance(data.get("data"), list):
+                    return data["data"]
+                if isinstance(data, list):        # the old endpoint's shape, tolerated
+                    return data
+                raise ValueError(f"unexpected 17Lands response: {type(data).__name__}")
         raise RuntimeError("unreachable")
 
 
@@ -298,24 +300,27 @@ class RatingsCache:
         self._db.commit()
 
     @staticmethod
-    def key(expansion: str, fmt: str) -> str:
-        return f"{expansion}|{fmt}"
+    def key(expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD) -> str:
+        # v2: the endpoint changed on 2026-09-25; old cached pulls must not be reused
+        return f"v2|{expansion}|{fmt}|{time_period}"
 
-    def get(self, expansion: str, fmt: str) -> tuple[list[dict], str] | None:
+    def get(self, expansion: str, fmt: str,
+            time_period: str = DEFAULT_TIME_PERIOD) -> tuple[list[dict], str] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT body, fetched_at FROM datasets WHERE key=?",
-                (self.key(expansion, fmt),),
+                (self.key(expansion, fmt, time_period),),
             ).fetchone()
         if row is None:
             return None
         return json.loads(row[0]), row[1]
 
-    def put(self, expansion: str, fmt: str, rows: list[dict], fetched_at: str) -> None:
+    def put(self, expansion: str, fmt: str, rows: list[dict], fetched_at: str,
+            time_period: str = DEFAULT_TIME_PERIOD) -> None:
         with self._lock:
             self._db.execute(
                 "INSERT OR REPLACE INTO datasets VALUES (?,?,?,?,?)",
-                (self.key(expansion, fmt), expansion, fmt, fetched_at, json.dumps(rows)),
+                (self.key(expansion, fmt, time_period), expansion, fmt, fetched_at, json.dumps(rows)),
             )
             self._db.commit()
 
@@ -341,16 +346,16 @@ class RatingsProvider:
                  on_change: Callable[[], None] | None = None,
                  refresh_hours: float = DEFAULT_REFRESH_HOURS,
                  min_games: int = DEFAULT_MIN_GAMES,
-                 start_date: str = DEFAULT_START_DATE,
+                 time_period: str = DEFAULT_TIME_PERIOD,
                  now: Callable[[], datetime] = datetime.now) -> None:
         self.cache_dir = Path(cache_dir)
         self.expansion = expansion
         self.format = fmt
+        self.time_period = time_period
         self.client = client or RatingsClient()
         self.on_change = on_change
         self.refresh_hours = refresh_hours
         self.min_games = min_games
-        self.start_date = start_date
         self._now = now
         self.cache = RatingsCache(self.cache_dir / "ratings.sqlite")
         self._lock = threading.Lock()
@@ -390,7 +395,7 @@ class RatingsProvider:
             return self._dataset
 
     def _load_cached(self) -> None:
-        cached = self.cache.get(self.expansion, self.format)
+        cached = self.cache.get(self.expansion, self.format, self.time_period)
         if cached is None:
             return
         rows, fetched_at = cached
@@ -450,6 +455,7 @@ class RatingsProvider:
             "source": "17Lands",
             "expansion": self.expansion,
             "format": self.format,
+            "time_period": self.time_period,
             "status": state,
             "fetching": fetching,
             "fetched_at": ds.fetched_at if ds else None,
@@ -475,13 +481,12 @@ class RatingsProvider:
             self._last_attempt = time.monotonic()
         self._notify()
         try:
-            end = self._now().date().isoformat()
-            rows = self.client.fetch(self.expansion, self.format, self.start_date, end)
+            rows = self.client.fetch(self.expansion, self.format, self.time_period)
             fetched_at = self._now().isoformat(timespec="seconds")
             ds = Dataset(rows, self.expansion, self.format, fetched_at, self.min_games)
             if len(ds) == 0:
                 raise ValueError(f"17Lands returned no cards for {self.expansion!r}/{self.format!r}")
-            self.cache.put(self.expansion, self.format, rows, fetched_at)
+            self.cache.put(self.expansion, self.format, rows, fetched_at, self.time_period)
             with self._lock:
                 self._dataset = ds
                 self.error = None

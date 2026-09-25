@@ -119,39 +119,47 @@ lists substantially. Expect partial coverage, never full.
 
 - **Filters/vocabulary endpoint:** `https://www.17lands.com/data/filters` → JSON
   with `expansions`, `formats_by_expansion`, `time_periods`, `colors`.
-- **Card ratings endpoint:**
+- **The card data endpoint the site itself uses (verified 2026-09-25):**
   ```
-  https://www.17lands.com/card_ratings/data?expansion=Cube%20-%20Powered&format=PremierDraft&start_date=2026-01-01&end_date=2026-09-21
+  https://www.17lands.com/api/card_data?expansion=Cube%20-%20Powered&event_type=PremierDraft&time_period=ALL_TIME
   ```
+  Response: `{"copyright", "notes", "data": [card, ...]}`. Found by reading
+  the site's bundle: the Card Data page calls `/api/card_data` with
+  `expansion`, `event_type`, `time_period`, `user_group`, `colors`.
+  `time_period` values come from `/data/filters` (`ALL_TIME`,
+  `LATEST_EVENT`, `LAST_TWO_WEEKS`, ...). Pyrogoyf: 77,954 GIH games,
+  62.9% GIH WR — exactly what the site shows.
+- **The trap: `/card_ratings/data` is the OLD endpoint and is wrong for cube.**
+  It takes `expansion`, `format`, `start_date`, `end_date` (plain dates only;
+  datetimes are rejected with `date_from_datetime_inexact`), returns the same
+  card schema, **ignores the dates entirely for cube**, and serves only a
+  short recent slice: 452 GIH games for Pyrogoyf instead of 77,954, and the
+  count of cards with a win rate drifted from 6 to 1 in a day. Everything
+  §2.4 said on 2026-09-24 about thin samples came from that endpoint and was
+  an artefact. Don't use it.
 - **Expansion codes are not what you'd guess.** `CUBE` returns `[]`. The real ones:
   - `Cube - Powered` → the **powered/Vintage** cube (contains Black Lotus,
     Ancestral Recall, Time Walk, Moxen) — **this is the one to use**
   - `Cube` → unpowered Arena Cube
   - `Cube - Planar`, `Chaos` → other variants
   Note the space must be percent-encoded.
-- **Response fields** (flat array of objects): `name`, `mtga_id`, `color`,
-  `rarity`, `url`, `types`, `seen_count`, `avg_seen` (ALSA), `pick_count`,
-  `avg_pick` (ATA), `game_count`, `win_rate` (GP WR), `opening_hand_win_rate`,
+- **Card fields:** `name`, `mtga_id`, `color`, `rarity`, `url`, `types`,
+  `seen_count`, `avg_seen` (ALSA), `pick_count`, `avg_pick` (ATA),
+  `game_count`, `win_rate` (GP WR), `opening_hand_win_rate`,
   `drawn_win_rate`, **`ever_drawn_win_rate` (GIH WR)**, `ever_drawn_game_count`,
   `never_drawn_win_rate`, `drawn_improvement_win_rate` (IWD).
-- **Behaviours that will bite you (re-verified 2026-09-24):**
-  1. **Win-rate fields are `null` below 500 games, exactly.** Count fields are
-     always populated. Observed: the lowest `ever_drawn_game_count` with a
-     non-null GIH WR was 503; the highest with a null was 499. Gate on the
-     count and render "insufficient data" rather than a blank or a zero.
-  2. **You must pass explicit `start_date`/`end_date`, but they don't filter
-     cube data.** Windows of one year, all-time, and ending 2024-12-31 all
-     returned the identical 540 cards and 335,656 total games. `/data/filters`
-     `start_dates` gives `Cube - Powered` as 2026-08-26: the dataset is the
-     **current Arena cube run only**, cumulative. Send `2019-01-01`..today and
-     don't build a date picker.
-  3. **Sample sizes are thin.** One month into the 2026-08 run: median 237
-     GIH games per card, **only 6 of 540 cards had a public GIH WR**. `avg_pick`
-     (ATA) was null for 538. `avg_seen` (ALSA) was present for 532 and is the
-     one signal that is always usable. Refresh daily; more cards cross 500 as
-     the run goes on, and a new run resets everything.
+- **What ALL_TIME looks like (2026-09-25):** 952 cards, because it spans
+  every run of the powered cube and retired cards stay in; 783 have a GIH WR.
+  Win rates are null only when the game count is tiny (lowest with a value:
+  512). GIH WR deciles run 50.5% to 58.4%; the top of the cube sits near 63%.
+  Always render the game count next to the rate.
+- **Usage notice.** The response's `notes` field says the data is only for use
+  on 17Lands.com and that the only data permitted for outside use is at
+  17lands.com/public_datasets. This tool is a private local reader making one
+  pull a day, but that is the user's call, not ours; the notice is surfaced
+  in the README.
 - **Etiquette:** serialise requests, ~1s apart, back off on failure, and **cache to
-  disk**. Refresh at most once a day. This is one small pull (~350KB), but don't
+  disk**. Refresh at most once a day. This is one pull (~650KB); don't
   hammer it.
 - **Joining:** join on `name`. Normalise `///` → `//` for split/DFC cards and
   strip surrounding whitespace. 17Lands lists DFCs by front face only

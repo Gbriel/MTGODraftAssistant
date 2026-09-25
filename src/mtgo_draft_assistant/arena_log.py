@@ -40,6 +40,7 @@ import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from .draft_log import Draft, Pick
@@ -77,10 +78,25 @@ class ArenaDraft:
     picks: dict[tuple[int, int], ArenaPick] = field(default_factory=dict)
     complete: bool = False
     warnings: list[str] = field(default_factory=list)
+    last_event_at: str | None = None   # log timestamp preceding the latest draft message
+
+    @property
+    def last_event_time(self) -> datetime | None:
+        return parse_timestamp(self.last_event_at)
 
     @property
     def ordered_picks(self) -> list[ArenaPick]:
         return [self.picks[k] for k in sorted(self.picks)]
+
+
+def parse_timestamp(s: str | None) -> datetime | None:
+    """``9/24/2026 7:55:43 PM`` (local time) -> datetime, or None."""
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%m/%d/%Y %I:%M:%S %p")
+    except ValueError:
+        return None
 
 
 def placeholder(grp_id: int) -> str:
@@ -248,6 +264,9 @@ class ArenaLogParser:
             self.current.warnings.append(msg)
 
     def _bump(self, d: ArenaDraft | None = None) -> None:
+        target = d or self.current
+        if target is not None:
+            target.last_event_at = self._last_ts
         if d is None or d is self.current:
             self.version += 1
 
@@ -373,6 +392,11 @@ class ArenaWatcher:
     def arena_draft(self) -> ArenaDraft | None:
         with self._lock:
             return self._parser.current
+
+    def last_activity(self) -> datetime | None:
+        """When the current draft last changed, by the log's own clock."""
+        cur = self.arena_draft
+        return cur.last_event_time if cur is not None else None
 
     # -- loop
     def run(self, callback: Callable[[Update], None],

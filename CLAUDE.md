@@ -74,15 +74,16 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   UI shows colour-coded cells (black text) grouped W U B R G / multi /
   colourless / land, images on the pack on screen, hover preview elsewhere.
 - **M4 17Lands done** — `ratings.py`: one daily pull of the Arena
-  `Cube - Powered` card ratings, cached in `data/cache/ratings.sqlite`,
-  joined by name (front-face and accent-insensitive fallbacks). The badge on
-  every tile is **ALSA** (average last-seen-at), because win rates are `null`
-  below 500 games and cube data is thin; GIH WR is added when it exists. The
-  status line reports dataset size, how many cards have a win rate, and how
-  many cards seen this draft have no Arena data. `--no-ratings` or a
-  `[ratings]` table in `config.toml` (see `config.example.toml`) controls it.
-  DESIGN.md §2.4 records what the endpoint really does; read it before
-  touching the fetch.
+  `Cube - Powered` card data from **`/api/card_data` with
+  `time_period=ALL_TIME`** (the endpoint the site itself uses; the older
+  `/card_ratings/data` serves a tiny recent slice and made every win rate
+  null — DESIGN.md §2.4 has the story), cached in `data/cache/ratings.sqlite`,
+  joined by name (front-face and accent-insensitive fallbacks). The badge is
+  **GIH WR then ALSA**. A second `LATEST_EVENT` pull defines the current
+  Arena cube for the card lookup, since ALL_TIME keeps retired cards.
+  `--no-ratings` or a `[ratings]` table in `config.toml` controls it. The
+  response carries a 17Lands usage notice; it is surfaced in the README and
+  is the user's call.
 - **Arena done** — `arena_log.py`: streaming parser for `Player.log` draft
   events plus a byte-offset tail watcher, producing the same `Draft` so the
   analysis and UI are shared. `--arena` on the CLI. Card ids are named from
