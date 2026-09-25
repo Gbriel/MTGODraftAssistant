@@ -19,11 +19,12 @@ obvious reading of the format is correct.
 
 ## Working agreements
 
-- **Read-only with respect to MTGO.** Never write to, inject into, or automate the
-  client. Only ever read files it already wrote. This is non-negotiable and
-  permanent — it's what keeps the tool defensible.
-- **Never edit files under the MTGO log directories.** They are inputs. Copy to
-  `tests/fixtures/` if you need a new fixture.
+- **Read-only with respect to MTGO and Arena.** Never write to, inject into, or
+  automate either client. Only ever read files they already wrote. This is
+  non-negotiable and permanent — it's what keeps the tool defensible.
+- **Never edit files under the MTGO log directories or Arena's `Player.log`.**
+  They are inputs. Copy to `tests/fixtures/` if you need a new fixture
+  (the Arena fixtures are line extracts, with account inventory data left out).
 - **Keep `tests/test_replay.py` green.** It replays 16 real snapshots of a draft
   log mid-write. If a parser change breaks it, the parser is wrong. Add fixtures;
   don't edit existing ones to fit new code.
@@ -82,9 +83,21 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   `[ratings]` table in `config.toml` (see `config.example.toml`) controls it.
   DESIGN.md §2.4 records what the endpoint really does; read it before
   touching the fetch.
-- Tests: `test_replay.py`, `test_watcher.py`, `test_analysis.py`,
-  `test_scryfall.py`, `test_ratings.py`, `test_server.py`, `test_config.py` —
-  all passing, no network needed.
+- **Arena done** — `arena_log.py`: streaming parser for `Player.log` draft
+  events plus a byte-offset tail watcher, producing the same `Draft` so the
+  analysis and UI are shared. `--arena` on the CLI. Card ids are named from
+  the 17Lands `mtga_id` column first, then Scryfall `/cards/arena/{id}`
+  (cached in `cards.sqlite`). Pod size is inferred from the wheels
+  (`analysis.infer_pod_size`) because Arena logs no player list. DESIGN.md
+  §2.5 has the verified format, including the repeated-notify and
+  duplicate-pick traps. Fixtures in `tests/fixtures/arena/` are verbatim
+  extracts of a real log.
+- **Second MTGO corpus** — `tests/fixtures/drafts/` holds two more complete
+  MTGO logs; `test_corpus.py` runs every invariant over all of them and will
+  pick up any new log dropped in.
+- Tests: `test_replay.py`, `test_corpus.py`, `test_watcher.py`,
+  `test_analysis.py`, `test_arena.py`, `test_scryfall.py`, `test_ratings.py`,
+  `test_server.py`, `test_config.py` — all passing, no network needed.
 - **Next: M3** pool tracker (needs a cube list). M5 match logs last, after
   re-verifying the format.
 

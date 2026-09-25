@@ -28,6 +28,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
+from .arena_log import ArenaWatcher
 from .config import save_log_dir
 from .ratings import CardRating, RatingsProvider
 from .scryfall import CardInfo, CardResolver
@@ -103,7 +104,9 @@ def build_state(update: Update | None, analysis: Analysis | None,
             "players": d.players,
             "set_name": d.set_name,
             "pod_size": analysis.pod_size,
+            "pod_size_source": analysis.pod_size_source,
             "pack_sizes": {str(k): v for k, v in analysis.pack_sizes.items()},
+            "source": d.source,
         },
         "position": {
             "pack": analysis.current_pack,
@@ -321,7 +324,8 @@ class DraftServer:
                  resolver: CardResolver | None = None,
                  ratings: RatingsProvider | None = None,
                  config_path: Path | None = None,
-                 allow_config: bool = True) -> None:
+                 allow_config: bool = True,
+                 watcher: DraftWatcher | ArenaWatcher | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.resolver = resolver
@@ -331,8 +335,16 @@ class DraftServer:
             resolver.on_change = self._on_cards_changed
         if ratings is not None:
             ratings.on_change = self._on_cards_changed
+        if watcher is None:
+            watcher = DraftWatcher(self.log_dir, interval=interval)
+        self.watcher = watcher
+        self.arena = isinstance(watcher, ArenaWatcher)
+        if self.arena:
+            watcher.namer = self._arena_name
+            self.log_dir = watcher.log_dir
+            allow_config = False            # one fixed file; nothing to configure
+        self.config_locked = not allow_config
         self.store = StateStore(self._idle_state(0))
-        self.watcher = DraftWatcher(self.log_dir, interval=interval)
         self.httpd = DraftHTTPServer(
             (host, port), self.store, verbose=verbose,
             image_dir=resolver.image_dir if resolver else None,
@@ -358,7 +370,22 @@ class DraftServer:
 
     def _idle_state(self, version: int) -> dict:
         meta = self.ratings.status() if self.ratings is not None else None
-        return build_state(None, None, self.log_dir, version, ratings_meta=meta)
+        return self._decorate(build_state(None, None, self.log_dir, version, ratings_meta=meta))
+
+    def _decorate(self, state: dict) -> dict:
+        state["source"] = "arena" if self.arena else "mtgo"
+        state["config_locked"] = self.config_locked
+        return state
+
+    def _arena_name(self, grp_id: int) -> str | None:
+        """Arena card id -> name: 17Lands first (no network), then Scryfall (cached, async)."""
+        if self.ratings is not None:
+            name = self.ratings.arena_name(grp_id)
+            if name:
+                return name
+        if self.resolver is not None:
+            return self.resolver.arena_name(grp_id)
+        return None
 
     def _publish(self, update: Update, analysis: Analysis) -> None:
         names = draft_card_names(update)
@@ -376,11 +403,11 @@ class DraftServer:
         if self.ratings is not None:
             ratings, unmatched = self.ratings.lookup(names)
             meta = self.ratings.status()
-        self.store.set(build_state(
+        self.store.set(self._decorate(build_state(
             update, analysis, self.log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=meta, ratings_unmatched=unmatched,
-        ))
+        )))
 
     def _publish_idle(self) -> None:
         with self._last_lock:
@@ -449,6 +476,12 @@ class DraftServer:
         if self._stop.is_set():
             return
         if last is not None:
+            if self.arena:
+                # card names may have arrived: re-render the draft from the log
+                rebuilt = self.watcher.rebuild()
+                if rebuilt is not None:
+                    self._on_update(rebuilt)
+                    return
             self._publish(*last)
         else:
             # no draft yet, but the ratings status line still wants updating

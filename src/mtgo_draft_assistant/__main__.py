@@ -1,8 +1,9 @@
 """
     python -m mtgo_draft_assistant [--log-dir DIR] [--port 8765] [--no-browser]
+    python -m mtgo_draft_assistant --arena [--arena-log PATH]
 
 Starts the local tracker and opens it in your browser. Read-only: it only
-ever reads files MTGO has already written.
+ever reads files MTGO (or Arena) has already written.
 """
 
 from __future__ import annotations
@@ -10,7 +11,10 @@ from __future__ import annotations
 import argparse
 import sys
 import webbrowser
+from pathlib import Path
 
+from .arena_log import DEFAULT_LOG as DEFAULT_ARENA_LOG
+from .arena_log import ArenaWatcher
 from .config import REPO_ROOT, ConfigError, load_config, ratings_settings, resolve_log_dir
 from .ratings import (
     DEFAULT_EXPANSION,
@@ -29,6 +33,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="mtgo_draft_assistant", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--log-dir", help="MTGO draft log directory (Settings -> Save Draft Log)")
+    ap.add_argument("--arena", action="store_true",
+                    help="watch MTG Arena's Player.log instead of MTGO draft logs "
+                         "(needs Detailed Logs enabled in Arena's options)")
+    ap.add_argument("--arena-log", default=None,
+                    help=f"path to Arena's Player.log (default {DEFAULT_ARENA_LOG})")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--interval", type=float, default=0.5, help="poll interval in seconds")
@@ -47,14 +56,22 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     log_dir = None
-    try:
-        log_dir = resolve_log_dir(args.log_dir)
-    except ConfigError:
-        print("No draft log directory configured yet. Set it in the web page "
-              "(it's the path from MTGO's Settings -> Save Draft Log).", flush=True)
-    if log_dir is not None and not log_dir.is_dir():
-        print(f"warning: {log_dir} does not exist yet; waiting for MTGO to create it",
-              file=sys.stderr, flush=True)
+    watcher = None
+    if args.arena:
+        arena_log = Path(args.arena_log).expanduser() if args.arena_log else DEFAULT_ARENA_LOG
+        if not arena_log.is_file():
+            print(f"warning: {arena_log} not found; waiting for Arena to write it "
+                  "(Options -> Account -> Detailed Logs must be on)", file=sys.stderr, flush=True)
+        watcher = ArenaWatcher(arena_log, interval=args.interval)
+    else:
+        try:
+            log_dir = resolve_log_dir(args.log_dir)
+        except ConfigError:
+            print("No draft log directory configured yet. Set it in the web page "
+                  "(it's the path from MTGO's Settings -> Save Draft Log).", flush=True)
+        if log_dir is not None and not log_dir.is_dir():
+            print(f"warning: {log_dir} does not exist yet; waiting for MTGO to create it",
+                  file=sys.stderr, flush=True)
 
     resolver = None if args.no_cards else CardResolver(args.cache_dir)
 
@@ -71,9 +88,12 @@ def main(argv: list[str] | None = None) -> int:
 
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
-                         resolver=resolver, ratings=ratings)
+                         resolver=resolver, ratings=ratings, watcher=watcher)
     server.start()
-    print(f"MTGO Draft Assistant watching {log_dir or '(no directory set)'}", flush=True)
+    if args.arena:
+        print(f"MTGO Draft Assistant watching Arena log {watcher.log_path}", flush=True)
+    else:
+        print(f"MTGO Draft Assistant watching {log_dir or '(no directory set)'}", flush=True)
     if resolver is not None:
         print(f"Card data cached in {args.cache_dir}", flush=True)
     if ratings is not None:

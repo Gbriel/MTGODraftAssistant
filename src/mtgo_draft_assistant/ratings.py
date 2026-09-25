@@ -70,6 +70,7 @@ def front_face(key: str) -> str:
 @dataclass(frozen=True)
 class CardRating:
     name: str                      # as 17Lands spells it
+    arena_id: int | None = None    # mtga_id: names Arena card ids without a network call
     color: str = ""
     rarity: str = ""
     alsa: float | None = None      # avg_seen: average last-seen-at pick
@@ -121,8 +122,13 @@ def _int(v) -> int:
 
 
 def rating_from_17lands(row: dict) -> CardRating:
+    try:
+        arena_id = int(row["mtga_id"]) if row.get("mtga_id") is not None else None
+    except (TypeError, ValueError):
+        arena_id = None
     return CardRating(
         name=str(row.get("name", "")).strip(),
+        arena_id=arena_id,
         color=str(row.get("color") or ""),
         rarity=str(row.get("rarity") or ""),
         alsa=_num(row.get("avg_seen")),
@@ -188,11 +194,17 @@ class Dataset:
         self._by_key: dict[str, CardRating] = {}
         self._by_face: dict[str, CardRating] = {}
         self._by_ascii: dict[str, CardRating] = {}
+        self._by_arena: dict[int, CardRating] = {}
         for r in self.cards.values():
             key = normalise(r.name)
             self._by_key.setdefault(key, r)
             self._by_face.setdefault(front_face(key), r)
             self._by_ascii.setdefault(strip_accents(key), r)
+            if r.arena_id is not None:
+                self._by_arena.setdefault(r.arena_id, r)
+
+    def by_arena_id(self, grp_id: int) -> CardRating | None:
+        return self._by_arena.get(grp_id)
 
     def __len__(self) -> int:
         return len(self.cards)
@@ -413,6 +425,12 @@ class RatingsProvider:
         if ds is None:
             return {}, list(names)
         return ds.lookup(names)
+
+    def arena_name(self, grp_id: int) -> str | None:
+        """Card name for an Arena id, from the dataset's mtga_id column. No network."""
+        ds = self.dataset
+        r = ds.by_arena_id(grp_id) if ds is not None else None
+        return r.name if r is not None else None
 
     def status(self) -> dict:
         ds = self.dataset

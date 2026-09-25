@@ -303,6 +303,55 @@ def test_network_error_is_recorded_and_not_hammered(tmp_path):
     assert client.lookups == ["Badlands"]
 
 
+class ArenaFakeClient(FakeClient):
+    """Adds /cards/arena/{id}: 1 -> Sol Ring, anything else unknown."""
+
+    def lookup_arena(self, grp_id):
+        self.lookups.append(f"arena:{grp_id}")
+        if grp_id in self.fail:
+            raise OSError("network down")
+        return CARDS["Sol Ring"] if grp_id == 1 else None
+
+
+def test_arena_id_resolves_to_name_and_caches_card(tmp_path):
+    client = ArenaFakeClient()
+    r = CardResolver(tmp_path, client=client)
+    assert r.arena_name(1) is None                    # unknown yet: queued
+    assert r.arena_name(2) is None
+    r.start()
+    try:
+        assert wait_until(lambda: r.pending == 0)
+        assert r.arena_name(1) == "Sol Ring"
+        assert r.arena_name(2) is None                # looked up, Scryfall has no such id
+        assert r.lookup(["Sol Ring"])["Sol Ring"].group == "C"   # card stored from the same JSON
+        assert (tmp_path / "images" / "id-sol.jpg").exists()
+    finally:
+        r.stop()
+    assert client.lookups.count("arena:1") == 1 and client.lookups.count("arena:2") == 1
+    assert client.single_lookups == [] and client.batches == 0, "no lookup by name was needed"
+
+    # second resolver: both answers come from disk, no network
+    client2 = ArenaFakeClient()
+    r2 = CardResolver(tmp_path, client=client2)
+    assert r2.arena_name(1) == "Sol Ring" and r2.arena_name(2) is None
+    assert r2.pending == 0 and client2.lookups == []
+    r2.stop()
+
+
+def test_arena_lookup_failure_is_retried_later_not_hammered(tmp_path):
+    client = ArenaFakeClient(fail={1})
+    r = CardResolver(tmp_path, client=client)
+    r.start()
+    try:
+        assert r.arena_name(1) is None
+        assert wait_until(lambda: r.pending == 0)
+        assert r.errors and "arena 1" in r.errors[0]
+        assert r.arena_name(1) is None and r.request_arena([1]) == 0
+    finally:
+        r.stop()
+    assert client.lookups == ["arena:1"]
+
+
 def test_request_is_thread_safe(tmp_path):
     r = CardResolver(tmp_path, client=FakeClient())
     r.start()

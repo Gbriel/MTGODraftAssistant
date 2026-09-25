@@ -242,6 +242,75 @@ def test_ratings_status_reaches_idle_state(tmp_path):
         s.stop()
 
 
+ARENA_LIVE = os.path.join(ROOT, "tests", "fixtures", "arena", "arena_cube_in_progress.log")
+ARENA_COMPLETE = os.path.join(ROOT, "tests", "fixtures", "arena", "arena_cube_complete.log")
+
+
+def test_arena_mode_end_to_end(tmp_path):
+    """Arena log -> names via 17Lands ids and Scryfall arena ids -> state + SSE."""
+    from mtgo_draft_assistant.arena_log import ArenaWatcher
+    from mtgo_draft_assistant.ratings import RatingsProvider
+    from test_ratings import FakeClient as FakeRatingsClient, row
+
+    log = tmp_path / "Player.log"
+    shutil.copyfile(ARENA_LIVE, log)
+    # 17Lands knows the first pick's id; Scryfall knows the first card in the pack
+    rows = [row("Bristly Bill, Spine Sower", alsa=3.0, mtga_id=17047)]
+    ratings = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=rows))
+
+    class ArenaScryfall(FakeClient):
+        def lookup_arena(self, grp_id):
+            self.lookups.append(f"arena:{grp_id}")
+            if grp_id == 7163:
+                return payload("Black Lotus", "id-lotus", [], "Artifact", 0, "{0}")
+            return None
+    scry = ArenaScryfall(cards={})
+    resolver = CardResolver(tmp_path / "cache", client=scry)
+    s = DraftServer(None, port=0, interval=0.05, resolver=resolver, ratings=ratings,
+                    watcher=ArenaWatcher(log, interval=0.05))
+    s.start()
+    try:
+        deadline = time.time() + 6
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if (st["picks"] and st["picks"][0]["picked"] == "Bristly Bill, Spine Sower"
+                    and st["picks"][0]["available"][0] == "Black Lotus" and st["cards_pending"] == 0):
+                break
+            time.sleep(0.05)
+        assert st["source"] == "arena" and st["config_locked"] is True
+        assert st["file"] == "Player.log"
+        assert st["draft"]["source"] == "arena" and st["draft"]["set_name"] == "CubeDraft_Powered_20260908"
+        assert st["draft"]["pod_size"] == 8 and st["draft"]["pod_size_source"] == "assumed"
+        assert st["position"]["status"] == "on_screen" and st["position"]["pack"] == 1
+        assert st["picks"][0]["picked"] == "Bristly Bill, Spine Sower"
+        assert st["picks"][0]["available"][0] == "Black Lotus"
+        assert st["picks"][0]["available"][2] == "#17047" or st["picks"][0]["available"][2] == "Bristly Bill, Spine Sower"
+        # unknown ids stay as placeholders and are reported as unmatched by 17Lands
+        assert any(n.startswith("#") for n in st["picks"][0]["available"])
+        assert "Bristly Bill, Spine Sower" in st["ratings"]
+        assert st["cards"]["Black Lotus"]["group"] == "C"
+        # configuration is refused in Arena mode
+        code, res = _post(s.url + "api/config", {"log_dir": str(tmp_path)})
+        assert code == 403
+
+        # a relaunch rewrites the file with a finished draft
+        shutil.copyfile(ARENA_COMPLETE, log)
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["draft"] and st["draft"]["event_id"].startswith("6691070a"):
+                break
+            time.sleep(0.05)
+        assert st["draft"]["event_id"].startswith("6691070a")
+        assert sum(p["complete"] for p in st["picks"]) == 45
+        assert st["draft"]["pod_size_source"] == "inferred" and len(st["wheels"]) == 21
+    finally:
+        s.stop()
+    # the Scryfall arena lookups were cached: every id at most once
+    arena_lookups = [x for x in scry.lookups if x.startswith("arena:")]
+    assert len(arena_lookups) == len(set(arena_lookups))
+
+
 def _post(url: str, payload: dict) -> tuple[int, dict]:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",

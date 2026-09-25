@@ -178,6 +178,11 @@ class ScryfallClient:
                     not_found.append(n)
         return found, not_found
 
+    def lookup_arena(self, grp_id: int) -> dict | None:
+        """One card by Arena id (grpId). None if Scryfall doesn't know it."""
+        body = self._request(f"{BASE_URL}/cards/arena/{int(grp_id)}", "application/json")
+        return json.loads(body) if body is not None else None
+
     def download(self, url: str) -> bytes | None:
         return self._request(url, "image/jpeg")
 
@@ -200,7 +205,26 @@ class CardCache:
                 image_url TEXT, image_file TEXT,
                 fetched_at TEXT
             )""")
+        # Arena card ids -> names (name NULL = Scryfall doesn't know the id)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS arena_ids (
+                grp_id INTEGER PRIMARY KEY,
+                name TEXT,
+                fetched_at TEXT
+            )""")
         self._db.commit()
+
+    def get_arena(self, grp_id: int) -> tuple[bool, str | None]:
+        """(known, name): known=False if never looked up; name=None if looked up and missing."""
+        with self._lock:
+            row = self._db.execute("SELECT name FROM arena_ids WHERE grp_id=?", (int(grp_id),)).fetchone()
+        return (row is not None, row[0] if row else None)
+
+    def put_arena(self, grp_id: int, name: str | None) -> None:
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO arena_ids VALUES (?,?,?)",
+                             (int(grp_id), name, datetime.now().isoformat(timespec="seconds")))
+            self._db.commit()
 
     def get(self, name: str) -> CardInfo | None:
         with self._lock:
@@ -258,6 +282,12 @@ class CardResolver:
         self._queue: queue.Queue[str] = queue.Queue()
         self._pending: set[str] = set()
         self._failed: dict[str, float] = {}
+        # Arena ids: resolved through /cards/arena/{id}; the card JSON that
+        # comes back is stored under its name too, so colours come for free.
+        self._arena_mem: dict[int, str | None] = {}
+        self._arena_queue: queue.Queue[int] = queue.Queue()
+        self._arena_pending: set[int] = set()
+        self._arena_failed: dict[int, float] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -321,7 +351,52 @@ class CardResolver:
 
     @property
     def pending(self) -> int:
-        return len(self._pending)
+        return len(self._pending) + len(self._arena_pending)
+
+    # -- Arena ids
+    def arena_name(self, grp_id: int) -> str | None:
+        """
+        Name for an Arena card id if known (memory, then disk). Unknown ids are
+        queued for lookup and None is returned now; ask again after on_change.
+        """
+        if grp_id in self._arena_mem:
+            return self._arena_mem[grp_id]
+        known, name = self.cache.get_arena(grp_id)
+        if known:
+            self._arena_mem[grp_id] = name
+            return name
+        self.request_arena([grp_id])
+        return None
+
+    def request_arena(self, ids: Iterable[int]) -> int:
+        queued = 0
+        now = time.monotonic()
+        with self._lock:
+            for g in ids:
+                if g in self._arena_pending or g in self._arena_mem:
+                    continue
+                if g in self._arena_failed and now - self._arena_failed[g] < self.RETRY_AFTER:
+                    continue
+                self._arena_pending.add(g)
+                self._arena_queue.put(g)
+                queued += 1
+        return queued
+
+    def _resolve_arena(self, grp_id: int) -> None:
+        try:
+            data = self.client.lookup_arena(grp_id)
+        except Exception as e:
+            with self._lock:
+                self._arena_failed[grp_id] = time.monotonic()
+            self.errors.append(f"arena {grp_id}: {e}")
+            del self.errors[:-20]
+            return
+        name = data.get("name") if data else None
+        self.cache.put_arena(grp_id, name)
+        self._arena_mem[grp_id] = name
+        if data and name and self._known(name) is None:
+            self._store(card_from_scryfall(name, data))
+            self.request([name])            # picks up the image on the normal path
 
     # -- worker
     def _drain(self) -> list[str]:
@@ -337,8 +412,27 @@ class CardResolver:
                 break
         return names
 
+    def _drain_arena(self) -> list[int]:
+        ids: list[int] = []
+        while True:
+            try:
+                ids.append(self._arena_queue.get_nowait())
+            except queue.Empty:
+                return ids
+
     def _worker(self) -> None:
         while not self._stop.is_set():
+            ids = self._drain_arena()
+            if ids:
+                for g in ids:
+                    if self._stop.is_set():
+                        break
+                    try:
+                        self._resolve_arena(g)
+                    finally:
+                        with self._lock:
+                            self._arena_pending.discard(g)
+                self._notify()
             names = self._drain()
             if not names:
                 continue

@@ -1,0 +1,336 @@
+Mono path[0] = 'C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data/Managed'
+
+[UnityCrossThreadLogger]==> EventJoin {"id":"4a7aae3c-962b-4266-acb5-c334e9fb015d","request":"{\"EventName\":\"CubeDraft_Powered_20260908\",\"EntryCurrencyType\":\"Gem\",\"EntryCurrencyPaid\":1500,\"CustomTokenId\":null,\"EventChoice\":\"\",\"DebugIgnoreEntryLimits\":false}"}
+[UnityCrossThreadLogger]9/24/2026 4:31:31 PM
+<== EventJoin(4a7aae3c-962b-4266-acb5-c334e9fb015d)
+{"Course":{"CourseId":"85118bdf-c782-40dd-8f91-47b075769571","InternalEventName":"CubeDraft_Powered_20260908","CurrentModule":"PlayerDraft"}}
+[UnityCrossThreadLogger]9/24/2026 4:31:31 PM
+[UnityCrossThreadLogger]Client.SceneChange {"fromSceneName":"EventLanding","toSceneName":"TableDraftQueue","initiator":"System","context":"Entering table draft queue: CubeDraft_Power"}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":1,"SelfPack":1,"PackCards":"82141,99698,100335,82054,12553,92066,105806,66029,70584,73914,94993,92360,102673,71393,76656"}
+[UnityCrossThreadLogger]Client.SceneChange {"fromSceneName":"TableDraftQueue","toSceneName":"Draft","initiator":"System","context":"HumanDraft"}
+Attempting to get IEmoteDataProvider through static instance of WrapperController. Consider injecting dependency rather than doing this.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"c3f463fc-59dd-48aa-8ed4-f662ab852509","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[99698],\"Pack\":1,\"Pick\":1}"}
+[UnityCrossThreadLogger]9/24/2026 4:32:28 PM
+<== EventPlayerDraftMakePick(c3f463fc-59dd-48aa-8ed4-f662ab852509)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":2,"SelfPack":1,"PackCards":"100574,79050,102698,95072,86811,58435,75864,104959,90704,91888,69505,98024,71320,12615"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"e23cd08e-a788-49bb-bbdb-3e93a5c5b208","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[58435],\"Pack\":1,\"Pick\":2}"}
+[UnityCrossThreadLogger]9/24/2026 4:33:31 PM
+<== EventPlayerDraftMakePick(e23cd08e-a788-49bb-bbdb-3e93a5c5b208)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":3,"SelfPack":1,"PackCards":"70011,102504,77494,103404,60275,87370,67106,100142,93132,95631,82586,90681,87972"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"ea61b4b2-a3c2-4025-bceb-a76ac0e9ca3c","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[87972],\"Pack\":1,\"Pick\":3}"}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":4,"SelfPack":1,"PackCards":"90651,71326,30238,89192,91168,92104,105165,92314,71318,73402,95635,77512"}
+[UnityCrossThreadLogger]9/24/2026 4:34:25 PM
+<== EventPlayerDraftMakePick(ea61b4b2-a3c2-4025-bceb-a76ac0e9ca3c)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"f71d9c98-e2d9-406d-98e9-5c2d1b8f1f89","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[73402],\"Pack\":1,\"Pick\":4}"}
+[UnityCrossThreadLogger]9/24/2026 4:34:40 PM
+<== EventPlayerDraftMakePick(f71d9c98-e2d9-406d-98e9-5c2d1b8f1f89)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":5,"SelfPack":1,"PackCards":"60251,91717,86653,77529,82076,51281,60981,99689,89185,83402,86990"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"ecbfce8f-b950-4062-ae45-c5bbed2d78d1","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[99689],\"Pack\":1,\"Pick\":5}"}
+[UnityCrossThreadLogger]9/24/2026 4:35:01 PM
+<== EventPlayerDraftMakePick(ecbfce8f-b950-4062-ae45-c5bbed2d78d1)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":6,"SelfPack":1,"PackCards":"71317,82235,89184,70262,91170,77004,94248,100540,90972,100676"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"bf9f1717-e7f0-41ba-9701-0dde2e3a1e25","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[90972],\"Pack\":1,\"Pick\":6}"}
+[UnityCrossThreadLogger]9/24/2026 4:35:09 PM
+<== EventPlayerDraftMakePick(bf9f1717-e7f0-41ba-9701-0dde2e3a1e25)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":7,"SelfPack":1,"PackCards":"72862,64171,92880,102787,70391,82649,6947,68735,91020"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"9dd5ee6d-bd5b-4237-99b4-f81623455d3f","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[92880],\"Pack\":1,\"Pick\":7}"}
+[UnityCrossThreadLogger]9/24/2026 4:35:29 PM
+<== EventPlayerDraftMakePick(9dd5ee6d-bd5b-4237-99b4-f81623455d3f)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":8,"SelfPack":1,"PackCards":"98428,89190,103444,75072,96671,85078,59613,98368"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"6ecb9de0-08ba-4439-9bdc-fbc1f81d50db","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[85078],\"Pack\":1,\"Pick\":8}"}
+[UnityCrossThreadLogger]9/24/2026 4:35:37 PM
+<== EventPlayerDraftMakePick(6ecb9de0-08ba-4439-9bdc-fbc1f81d50db)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":9,"SelfPack":1,"PackCards":"82054,105806,66029,70584,94993,102673,76656"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"af109c17-5d07-4935-9f27-d39d12a4046a","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[76656],\"Pack\":1,\"Pick\":9}"}
+[UnityCrossThreadLogger]9/24/2026 4:36:12 PM
+<== EventPlayerDraftMakePick(af109c17-5d07-4935-9f27-d39d12a4046a)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":10,"SelfPack":1,"PackCards":"100574,79050,95072,104959,91888,69505"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"34110eb4-c56f-4477-bc5b-f9ed33be5af5","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91888],\"Pack\":1,\"Pick\":10}"}
+[UnityCrossThreadLogger]9/24/2026 4:36:52 PM
+<== EventPlayerDraftMakePick(34110eb4-c56f-4477-bc5b-f9ed33be5af5)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":11,"SelfPack":1,"PackCards":"70011,87370,95631,82586,90681"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"de887b2c-e520-4b4f-be3e-0bb4982651c7","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[87370],\"Pack\":1,\"Pick\":11}"}
+[UnityCrossThreadLogger]9/24/2026 4:37:30 PM
+<== EventPlayerDraftMakePick(de887b2c-e520-4b4f-be3e-0bb4982651c7)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":12,"SelfPack":1,"PackCards":"30238,91168,95635,77512"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"6dfc73dd-3e66-4872-93c9-357c55f73d14","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91168],\"Pack\":1,\"Pick\":12}"}
+[UnityCrossThreadLogger]9/24/2026 4:38:17 PM
+<== EventPlayerDraftMakePick(6dfc73dd-3e66-4872-93c9-357c55f73d14)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":13,"SelfPack":1,"PackCards":"91717,89185,86990"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"bddf8802-832f-4970-bb54-151089dfeb2b","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91717],\"Pack\":1,\"Pick\":13}"}
+[UnityCrossThreadLogger]9/24/2026 4:38:20 PM
+<== EventPlayerDraftMakePick(bddf8802-832f-4970-bb54-151089dfeb2b)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":14,"SelfPack":1,"PackCards":"89184,77004"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"fad4473e-ae40-4be8-845e-b42f62f6fcee","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[89184],\"Pack\":1,\"Pick\":14}"}
+[UnityCrossThreadLogger]9/24/2026 4:38:24 PM
+<== EventPlayerDraftMakePick(fad4473e-ae40-4be8-845e-b42f62f6fcee)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":15,"SelfPack":1,"PackCards":"82649"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"982e202c-702b-45f8-bb40-8297126914ec","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[82649],\"Pack\":1,\"Pick\":15}"}
+[UnityCrossThreadLogger]9/24/2026 4:38:28 PM
+<== EventPlayerDraftMakePick(982e202c-702b-45f8-bb40-8297126914ec)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":1,"SelfPack":2,"PackCards":"95070,70344,100632,37400,73472,76594,76955,70269,77825,106980,103686,83948,91614,90745,56597"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"93e83c42-7625-4cae-94a4-a64fca6871d6","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[70344],\"Pack\":2,\"Pick\":1}"}
+[UnityCrossThreadLogger]9/24/2026 4:38:37 PM
+<== EventPlayerDraftMakePick(93e83c42-7625-4cae-94a4-a64fca6871d6)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":2,"SelfPack":2,"PackCards":"105136,79446,81841,89131,69393,87809,89193,103489,94610,82084,92370,20551,19677,103612"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"b5968dd5-922b-4f5c-a680-ed1d8ec18b84","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[81841],\"Pack\":2,\"Pick\":2}"}
+[UnityCrossThreadLogger]9/24/2026 4:39:03 PM
+<== EventPlayerDraftMakePick(b5968dd5-922b-4f5c-a680-ed1d8ec18b84)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":3,"SelfPack":2,"PackCards":"90686,73935,90570,76029,47035,98546,80411,70672,69394,78196,91043,35657,82839"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"4366c047-419c-4118-9bf4-ca930151cd87","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91043],\"Pack\":2,\"Pick\":3}"}
+[UnityCrossThreadLogger]9/24/2026 4:39:17 PM
+<== EventPlayerDraftMakePick(4366c047-419c-4118-9bf4-ca930151cd87)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":4,"SelfPack":2,"PackCards":"101026,60311,79462,90952,91113,95526,20874,76954,69685,77484,54163,91882"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"03ac4d70-d824-4350-8fc0-10f2750e5ab5","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[60311],\"Pack\":2,\"Pick\":4}"}
+[UnityCrossThreadLogger]9/24/2026 4:39:42 PM
+<== EventPlayerDraftMakePick(03ac4d70-d824-4350-8fc0-10f2750e5ab5)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":5,"SelfPack":2,"PackCards":"77035,98497,71315,69530,93905,95052,105072,69396,29970,96775,39581"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"97d9fa97-bc59-4791-9f9f-6a4e8c0593da","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[96775],\"Pack\":2,\"Pick\":5}"}
+[UnityCrossThreadLogger]9/24/2026 4:40:19 PM
+<== EventPlayerDraftMakePick(97d9fa97-bc59-4791-9f9f-6a4e8c0593da)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":6,"SelfPack":2,"PackCards":"92356,59697,84281,92243,82496,55531,91096,98017,70748,91011"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"8b240572-bd70-4823-97a0-9a69d149a6c3","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91011],\"Pack\":2,\"Pick\":6}"}
+[UnityCrossThreadLogger]9/24/2026 4:40:29 PM
+<== EventPlayerDraftMakePick(8b240572-bd70-4823-97a0-9a69d149a6c3)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":7,"SelfPack":2,"PackCards":"78335,84803,84699,57373,75858,105051,60313,71795,89181"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"41b3f7da-840c-4ab3-87e4-c8e62566caad","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[89181],\"Pack\":2,\"Pick\":7}"}
+[UnityCrossThreadLogger]9/24/2026 4:41:09 PM
+<== EventPlayerDraftMakePick(41b3f7da-840c-4ab3-87e4-c8e62566caad)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":8,"SelfPack":2,"PackCards":"76254,102798,76260,76060,29589,78989,60295,36682"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"15c40f3e-f6eb-497d-a656-e53651b9dc2f","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[76260],\"Pack\":2,\"Pick\":8}"}
+[UnityCrossThreadLogger]9/24/2026 4:41:23 PM
+<== EventPlayerDraftMakePick(15c40f3e-f6eb-497d-a656-e53651b9dc2f)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":9,"SelfPack":2,"PackCards":"95070,73472,76594,70269,77825,91614,56597"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"0b5f4331-a55b-4ac5-ae4d-3940be52a0bb","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[56597],\"Pack\":2,\"Pick\":9}"}
+[UnityCrossThreadLogger]9/24/2026 4:42:21 PM
+<== EventPlayerDraftMakePick(0b5f4331-a55b-4ac5-ae4d-3940be52a0bb)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":10,"SelfPack":2,"PackCards":"105136,79446,87809,82084,92370,103612"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"1c457086-7cda-4c37-b604-3074ca0649eb","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[92370],\"Pack\":2,\"Pick\":10}"}
+[UnityCrossThreadLogger]9/24/2026 4:42:39 PM
+<== EventPlayerDraftMakePick(1c457086-7cda-4c37-b604-3074ca0649eb)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":11,"SelfPack":2,"PackCards":"90570,47035,98546,78196,82839"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"9685865a-2a6c-48af-9390-0c2efaf2534f","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[47035],\"Pack\":2,\"Pick\":11}"}
+[UnityCrossThreadLogger]9/24/2026 4:42:45 PM
+<== EventPlayerDraftMakePick(9685865a-2a6c-48af-9390-0c2efaf2534f)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":12,"SelfPack":2,"PackCards":"101026,79462,91113,20874"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"583558db-d6c0-401c-8679-8928dd460f4d","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[91113],\"Pack\":2,\"Pick\":12}"}
+[UnityCrossThreadLogger]9/24/2026 4:42:50 PM
+<== EventPlayerDraftMakePick(583558db-d6c0-401c-8679-8928dd460f4d)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":13,"SelfPack":2,"PackCards":"77035,98497,105072"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"3d95c6af-868f-4c70-bcec-29ffb4e7c607","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[98497],\"Pack\":2,\"Pick\":13}"}
+[UnityCrossThreadLogger]9/24/2026 4:43:10 PM
+<== EventPlayerDraftMakePick(3d95c6af-868f-4c70-bcec-29ffb4e7c607)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":14,"SelfPack":2,"PackCards":"82496,55531"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"924e565d-a5aa-48ef-9585-0efd640aa8df","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[82496],\"Pack\":2,\"Pick\":14}"}
+[UnityCrossThreadLogger]9/24/2026 4:43:13 PM
+<== EventPlayerDraftMakePick(924e565d-a5aa-48ef-9585-0efd640aa8df)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":15,"SelfPack":2,"PackCards":"78335"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"b64731f6-b6cc-43e1-8f1b-f72ea309cdf2","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[78335],\"Pack\":2,\"Pick\":15}"}
+[UnityCrossThreadLogger]9/24/2026 4:43:20 PM
+<== EventPlayerDraftMakePick(b64731f6-b6cc-43e1-8f1b-f72ea309cdf2)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":1,"SelfPack":3,"PackCards":"90939,99488,70257,39974,76988,76410,69669,86146,103472,105163,77492,91167,77014,12385,12697"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"bdb13c29-6da2-44c1-b567-fc283809bf42","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[77014],\"Pack\":3,\"Pick\":1}"}
+[UnityCrossThreadLogger]9/24/2026 4:44:05 PM
+<== EventPlayerDraftMakePick(bdb13c29-6da2-44c1-b567-fc283809bf42)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":2,"SelfPack":3,"PackCards":"80412,70740,83949,59877,105162,96583,19991,101550,102474,82684,69407,78895,84763,78352"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"197aee5c-8997-4ea2-81ee-bcb5df3bc847","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[69407],\"Pack\":3,\"Pick\":2}"}
+[UnityCrossThreadLogger]9/24/2026 4:44:23 PM
+<== EventPlayerDraftMakePick(197aee5c-8997-4ea2-81ee-bcb5df3bc847)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":3,"SelfPack":3,"PackCards":"70747,89188,96797,90934,102572,79241,95066,102584,90589,105741,20718,80408,93614"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"e1d1f361-2db1-4bf2-9d24-4a69050624c4","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[90589],\"Pack\":3,\"Pick\":3}"}
+[UnityCrossThreadLogger]9/24/2026 4:44:35 PM
+<== EventPlayerDraftMakePick(e1d1f361-2db1-4bf2-9d24-4a69050624c4)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":4,"SelfPack":3,"PackCards":"91103,73481,92218,76457,87101,100138,76228,98365,68738,51569,77533,60301"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"66125d85-232b-4ebd-a191-890ca9704427","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[60301],\"Pack\":3,\"Pick\":4}"}
+[UnityCrossThreadLogger]9/24/2026 4:44:53 PM
+<== EventPlayerDraftMakePick(66125d85-232b-4ebd-a191-890ca9704427)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":5,"SelfPack":3,"PackCards":"19831,47485,87760,86606,103499,76158,102625,90428,75763,71961,11867"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"4933872a-738b-44e2-b8c0-997f85f24299","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[11867],\"Pack\":3,\"Pick\":5}"}
+[UnityCrossThreadLogger]9/24/2026 4:45:00 PM
+<== EventPlayerDraftMakePick(4933872a-738b-44e2-b8c0-997f85f24299)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":6,"SelfPack":3,"PackCards":"17047,78549,71573,95684,77535,99795,82149,102870,92191,70015"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"4af8b2f0-fa5c-422d-bce2-ac7d994ac8b2","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[102870],\"Pack\":3,\"Pick\":6}"}
+[UnityCrossThreadLogger]9/24/2026 4:45:28 PM
+<== EventPlayerDraftMakePick(4af8b2f0-fa5c-422d-bce2-ac7d994ac8b2)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":7,"SelfPack":3,"PackCards":"97444,104902,84861,87308,37374,98475,70732,102606,96030"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"847f8114-bdcb-46d0-b9a0-d7e7ac2bee63","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[97444],\"Pack\":3,\"Pick\":7}"}
+[UnityCrossThreadLogger]9/24/2026 4:45:40 PM
+<== EventPlayerDraftMakePick(847f8114-bdcb-46d0-b9a0-d7e7ac2bee63)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":8,"SelfPack":3,"PackCards":"57365,91079,72434,73226,92230,84411,69620,91166"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"8f5f1bc8-7dbe-4e8c-abbe-518faf07bffd","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[69620],\"Pack\":3,\"Pick\":8}"}
+[UnityCrossThreadLogger]9/24/2026 4:45:49 PM
+<== EventPlayerDraftMakePick(8f5f1bc8-7dbe-4e8c-abbe-518faf07bffd)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":9,"SelfPack":3,"PackCards":"90939,70257,76988,76410,69669,103472,12697"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"f035cb82-9841-4c51-b90e-884d38f09380","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[90939],\"Pack\":3,\"Pick\":9}"}
+[UnityCrossThreadLogger]9/24/2026 4:46:56 PM
+<== EventPlayerDraftMakePick(f035cb82-9841-4c51-b90e-884d38f09380)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":10,"SelfPack":3,"PackCards":"70740,83949,105162,19991,82684,78352"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"72764de1-5102-4f68-80c7-e1df65ec86be","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[83949],\"Pack\":3,\"Pick\":10}"}
+[UnityCrossThreadLogger]9/24/2026 4:47:43 PM
+<== EventPlayerDraftMakePick(72764de1-5102-4f68-80c7-e1df65ec86be)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":11,"SelfPack":3,"PackCards":"89188,96797,102572,79241,105741"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"6c415d55-89c3-4c34-9512-0a77d13af957","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[105741],\"Pack\":3,\"Pick\":11}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:08 PM
+<== EventPlayerDraftMakePick(6c415d55-89c3-4c34-9512-0a77d13af957)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":12,"SelfPack":3,"PackCards":"76457,87101,76228,77533"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"fdd4ff09-c0e7-4ac5-a06d-446aa0f5207f","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[87101],\"Pack\":3,\"Pick\":12}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:14 PM
+<== EventPlayerDraftMakePick(fdd4ff09-c0e7-4ac5-a06d-446aa0f5207f)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":13,"SelfPack":3,"PackCards":"103499,75763,71961"}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"f8bb7e5b-1b2b-40a6-9e19-f588463705e8","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[103499],\"Pack\":3,\"Pick\":13}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:27 PM
+<== EventPlayerDraftMakePick(f8bb7e5b-1b2b-40a6-9e19-f588463705e8)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":14,"SelfPack":3,"PackCards":"78549,95684"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"0e1b1135-ca8f-4ca4-8f16-3959872b7aea","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[95684],\"Pack\":3,\"Pick\":14}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:42 PM
+<== EventPlayerDraftMakePick(0e1b1135-ca8f-4ca4-8f16-3959872b7aea)
+{"IsPickSuccessful":true}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"52ed6bfc-16d2-4824-af67-c3d68da35c15","SelfPick":15,"SelfPack":3,"PackCards":"102606"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"0fd12de9-1a42-4f57-9157-217a897d3b1f","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[95684],\"Pack\":3,\"Pick\":15}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:54 PM
+<== EventPlayerDraftMakePick(0fd12de9-1a42-4f57-9157-217a897d3b1f)
+{"TableInfo":{"Players":[{"ScreenName":"Wumpwumpwump","Avatar":"Avatar_Basic_Teferi"},{"ScreenName":"Gri","Avatar":"Avatar_Basic_Valgavoth_S25"},{"ScreenName":"Draftaholic","Avatar":"Avatar_Basic_LilianaVess"},{"ScreenName":"vanPeters","Avatar":"Avatar_Basic_Fblthp_OpenBeta"},{"ScreenName":"LikeThat_tv","Avatar":"Avatar_Basic_Adventurer"},{"ScreenName":"NickGard","Avatar":"Avatar_Basic_Gandalf_LTR"},{"ScreenName":"Smallz","Avatar":"Avatar_Basic_Jace_BLB"},{"ScreenName":"vatix","Avatar":"Avatar_Basic_Bolas_DragonGod"}],"SelfPack":3,"PickedCards":[99698,58435,87972,73402,99689,90972,92880,85078,76656,91888,87370,91168,91717,89184,82649,70344,81841,91043,60311,96775,91011,89181,76260,56597,92370,47035,91113,98497,82496,78335,77014,69407,90589,60301,11867,102870,97444,69620,90939,83949,105741,87101,103499,95684],"PickedStyles":[]},"PickInfo":{"PackCards":[102606],"NumCardsToPick":1,"SuggestedCards":[102606],"SelfPack":3,"SelfPick":15,"PackStyles":[]},"PackInfo":{"NegNeighborPacks":[],"PosNeighborPacks":[],"SelfPacks":[300022]}}
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"8caecc56-a934-4470-aea1-c9ba05c0ca58","request":"{\"DraftId\":\"52ed6bfc-16d2-4824-af67-c3d68da35c15\",\"GrpIds\":[102606],\"Pack\":3,\"Pick\":15}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:55 PM
+<== EventPlayerDraftMakePick(8caecc56-a934-4470-aea1-c9ba05c0ca58)
+{"IsPickingCompleted":true,"IsPickSuccessful":true}
+[UnityCrossThreadLogger]==> DraftCompleteDraft {"id":"c309440f-e665-4619-ab59-c27c7139749c","request":"{\"EventName\":\"CubeDraft_Powered_20260908\",\"IsBotDraft\":false}"}
+[UnityCrossThreadLogger]9/24/2026 4:48:55 PM
+<== DraftCompleteDraft(c309440f-e665-4619-ab59-c27c7139749c)
+[UnityCrossThreadLogger]9/24/2026 4:48:55 PM
+The AnimationClip 'Draft_WaitingOnPackTextFadeIn' used by the Animation component 'WaitinOnPacks_Text' must be marked as Legacy.
+Default clip could not be found in attached animations list.
+[UnityCrossThreadLogger]Client.SceneChange {"fromSceneName":"Draft","toSceneName":"EventLanding","initiator":"User","context":"CubeDraft_Power"}

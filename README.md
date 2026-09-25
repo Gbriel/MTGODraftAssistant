@@ -1,7 +1,8 @@
 # MTGO Draft Assistant
 
-A live, read-only tracker for **Magic Online** cube drafts. While you draft, it
-reads the draft log MTGO writes to disk and shows, in a browser tab:
+A live, read-only tracker for **Magic Online** cube drafts (and Arena drafts,
+see below). While you draft, it reads the draft log MTGO writes to disk and
+shows, in a browser tab:
 
 - **The pack on screen**, as card images in the order MTGO lists them.
 - **Wheels**: for every pack that came back to you, which cards the pod took
@@ -50,6 +51,22 @@ lazily as cards appear and cached forever in `data/cache/`. The first draft with
 a new cube takes a minute or so to fill in; after that it's instant. Run with
 `--no-cards` for a text-only offline mode.
 
+## MTG Arena
+
+The same tracker works for **Arena** drafts:
+
+```
+python -m mtgo_draft_assistant --arena
+```
+
+Arena must have **Options → Account → Detailed Logs (Plugin Support)** turned
+on; the tool then tails `Player.log` (read-only, like everything else) and shows
+the same panes. Arena logs card ids rather than names, so the first draft of a
+new set takes a few seconds to name every card; cube cards are named instantly
+from the 17Lands data. Arena does not log the pod, so the player count is
+inferred from the first pack that wheels back and shown as "assumed" until
+then. Use `--arena-log PATH` if your log lives somewhere unusual.
+
 ## 17Lands ratings
 
 [17Lands](https://www.17lands.com) publishes card statistics for the **Arena**
@@ -79,6 +96,8 @@ threshold. See `config.example.toml`.
 ```
 python -m mtgo_draft_assistant --help
   --log-dir DIR             draft log folder (otherwise config.toml or the web page)
+  --arena                   watch MTG Arena's Player.log instead
+  --arena-log PATH          where that log is, if not the default
   --port 8765               local port
   --no-browser              don't open a tab
   --no-cards                skip Scryfall; names only

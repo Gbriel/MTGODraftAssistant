@@ -270,8 +270,9 @@
   // -------------------------------------------------------------- header
   function renderHeader(st) {
     const d = st.draft;
+    const podNote = { players: "", inferred: " (inferred from wheels)", assumed: " (assumed)", unknown: "" }[d ? d.pod_size_source : "unknown"] || "";
     $("cube").textContent = d
-      ? `${d.set_name || "unknown cube"} · Event ${d.event_id || "?"} · ${d.pod_size} players`
+      ? `${d.set_name || "unknown cube"} · Event ${d.source === "arena" ? (d.event_id || "?").slice(0, 8) : (d.event_id || "?")} · ${d.pod_size || "?"} players${podNote}`
       : "";
     const p = st.position;
     const badge = $("position");
@@ -298,7 +299,10 @@
     pend.textContent = st.cards_pending ? `fetching ${st.cards_pending} cards…`
       : (st.card_errors && st.card_errors.length ? `Scryfall: ${st.card_errors.length} recent errors` : "");
     pend.title = (st.card_errors || []).join("\n");
-    if (!st.log_dir) $("file").textContent = "no draft log folder set";
+    $("logdir-change").hidden = !!st.config_locked;
+    if (st.source === "arena") {
+      $("file").textContent = st.file ? `Arena · ${st.log_dir}\\${st.file}` : `Arena · watching ${st.log_dir} — no draft in the log yet`;
+    } else if (!st.log_dir) $("file").textContent = "no draft log folder set";
     else if (!st.log_dir_ok) $("file").textContent = `${st.log_dir} — folder not found`;
     else if (st.file) $("file").textContent = `${st.log_dir}\\${st.file}`;
     else $("file").textContent = `watching ${st.log_dir} — no .txt logs yet`;
@@ -315,6 +319,7 @@
 
   function updateLogDirForm(st) {
     lastLogDir = st.log_dir;
+    if (st.config_locked) { form.hidden = true; return; }
     const needed = !st.log_dir || !st.log_dir_ok;
     form.hidden = !(needed || editing);
     $("logdir-cancel").hidden = needed;

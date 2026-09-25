@@ -163,6 +163,55 @@ lists substantially. Expect partial coverage, never full.
   Observed on the Holiday 2013 Cube fixture against the 2026-08 Arena run:
   183 of 238 matched.
 
+### 2.5 Arena draft log
+
+Verified 2026-09-24 against `Player.log` on this machine: six complete Arena
+powered-cube drafts (`CubeDraft_Powered_20260908`) and one captured live.
+Fixtures extracted verbatim in `tests/fixtures/arena/`.
+
+- **Location:** `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`.
+  Draft messages appear only with **Options → Account → Detailed Logs (Plugin
+  Support)** on; the file then says `DETAILED LOGS: ENABLED` near the top.
+  Wizards provides that switch for exactly this purpose, so reading it keeps
+  the read-only stance.
+- **Rewritten on every client launch** (the old one becomes
+  `Player-prev.log`), and it grows large: 98MB / 397k lines after one day.
+  Tail it by byte offset. Detect a relaunch as a size shrink, and — because
+  a poll can miss the small phase — also by re-reading the last bytes
+  consumed and comparing. Do not re-read the whole file per change.
+- **Encoding UTF-8, line endings CRLF throughout.** One bare CR exists in
+  the Unity boot banner; splitting on LF and stripping CR handles it.
+- **The pack on screen:** `[UnityCrossThreadLogger]Draft.Notify {"draftId",
+  "SelfPack", "SelfPick", "PackCards": "id,id,..."}`. Card ids are Arena
+  grpIds, not names. **`SelfPick` is trustworthy** (unlike MTGO's header):
+  `len(PackCards) == 16 - SelfPick` held for all 270 notifies. Keep checking.
+- **The pick:** `==> EventPlayerDraftMakePick {"id", "request": "<JSON
+  string>"}` — JSON inside JSON, decode `request` again — with `DraftId`,
+  `GrpIds` (one id), `Pack`, `Pick`. The response is a separate `<==
+  EventPlayerDraftMakePick(id)` line followed by `{"IsPickSuccessful":true}`;
+  no failure was seen in 100MB. **The next `Draft.Notify` can be logged
+  before the previous pick's response**, so treat the request as the commit.
+- **Repeats.** The live capture logged every `Draft.Notify` three times with
+  identical content; earlier drafts once. Key on (pack, pick). One draft
+  logged two pick requests for P3P15 with different ids; only the second was
+  in the notified pack. Rule: a request whose card is not in the pack is
+  ignored with a warning; the last valid one wins.
+- **Event name:** the `==> EventJoin` request before the draft carries
+  `EventName`; the draft id first appears in the first notify, 10–85 lines
+  later. `==> DraftCompleteDraft` ends the draft. Timestamps are separate
+  `[UnityCrossThreadLogger]M/D/YYYY h:mm:ss AM` lines preceding responses.
+- **No player list.** Once in 100MB a pick response carried
+  `TableInfo.Players` with the eight screen names; the parser uses it when it
+  shows up and never expects it. **Pod size is inferred from the wheels**
+  (`analysis.infer_pod_size`: the N for which every pack returns at p + N as
+  a subset with N - 1 missing). 21/21 clean pairs at N = 8 in all six drafts;
+  before the first lap the UI assumes 8 and says so.
+- **Naming ids:** 17Lands rows carry `mtga_id`, which named 482 of 506 ids
+  seen. The rest are older printings the cube uses; Scryfall
+  `GET /cards/arena/{id}` resolves those (its `/cards/collection` endpoint
+  does **not** accept `arena_id` identifiers). Unresolved ids are shown as
+  `#<id>` until they resolve, and the same card JSON seeds colours and images.
+
 ---
 
 ## 3. The analysis, spelled out
@@ -250,6 +299,7 @@ dependency has earned its place yet).
 ```
 src/mtgo_draft_assistant/
     draft_log.py     # parser — WRITTEN AND TESTED, see tests/
+    arena_log.py     # Arena Player.log parser + tail watcher -> same Draft — DONE
     watcher.py       # poll the draft dir, emit state on change — DONE (M1)
     analysis.py      # wheel diff, in-flight — DONE (M2); pool state — M3
     config.py        # log_dir resolution: --log-dir > env > config.toml — DONE
@@ -317,9 +367,11 @@ wanted later, prefer something with no build step.
 - **The log format is undocumented and can change with any MTGO update.** Parse
   defensively, fail loudly with the offending lines, and keep the fixture corpus
   green as a regression net.
-- **One draft's worth of evidence.** Everything verified here comes from a single
-  8-player Holiday Cube draft. A different pod size, a set draft, or a different
-  cube may behave differently. Capture a second corpus before hardening.
+- **Three drafts' worth of MTGO evidence.** §2.2 was verified on one draft and
+  re-confirmed on two more (`tests/fixtures/drafts/`, `test_corpus.py`), all
+  8-player Holiday 2013 Cube. A different pod size, a set draft, or a
+  different cube may still behave differently. Arena: six complete drafts plus
+  one live, all 8-player powered cube.
 
 ---
 
