@@ -72,10 +72,21 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   bulk download, nothing large held in memory. `--no-cards` runs offline.
   UI shows colour-coded cells (black text) grouped W U B R G / multi /
   colourless / land, images on the pack on screen, hover preview elsewhere.
+- **M4 17Lands done** — `ratings.py`: one daily pull of the Arena
+  `Cube - Powered` card ratings, cached in `data/cache/ratings.sqlite`,
+  joined by name (front-face and accent-insensitive fallbacks). The badge on
+  every tile is **ALSA** (average last-seen-at), because win rates are `null`
+  below 500 games and cube data is thin; GIH WR is added when it exists. The
+  status line reports dataset size, how many cards have a win rate, and how
+  many cards seen this draft have no Arena data. `--no-ratings` or a
+  `[ratings]` table in `config.toml` (see `config.example.toml`) controls it.
+  DESIGN.md §2.4 records what the endpoint really does; read it before
+  touching the fetch.
 - Tests: `test_replay.py`, `test_watcher.py`, `test_analysis.py`,
-  `test_scryfall.py`, `test_server.py` — all passing, no network needed.
-- **Next: M3** pool tracker (needs a cube list). Then M4 17Lands. M5 match logs
-  last, after re-verifying the format.
+  `test_scryfall.py`, `test_ratings.py`, `test_server.py`, `test_config.py` —
+  all passing, no network needed.
+- **Next: M3** pool tracker (needs a cube list). M5 match logs last, after
+  re-verifying the format.
 
 The server is stdlib on purpose (one page, one stream, one local client); a
 framework has not earned its place yet. Revisit if the API grows.

@@ -134,18 +134,34 @@ lists substantially. Expect partial coverage, never full.
   `avg_pick` (ATA), `game_count`, `win_rate` (GP WR), `opening_hand_win_rate`,
   `drawn_win_rate`, **`ever_drawn_win_rate` (GIH WR)**, `ever_drawn_game_count`,
   `never_drawn_win_rate`, `drawn_improvement_win_rate` (IWD).
-- **Two behaviours that will bite you:**
-  1. **Win-rate fields are `null` below ~500 games.** Count fields are always
-     populated. Gate on `ever_drawn_game_count` and render "insufficient data"
-     rather than showing a blank or a zero.
-  2. **You must pass explicit `start_date`/`end_date`.** Omitting them returns a
-     tiny recent window with near-zero counts, not all-time.
+- **Behaviours that will bite you (re-verified 2026-09-24):**
+  1. **Win-rate fields are `null` below 500 games, exactly.** Count fields are
+     always populated. Observed: the lowest `ever_drawn_game_count` with a
+     non-null GIH WR was 503; the highest with a null was 499. Gate on the
+     count and render "insufficient data" rather than a blank or a zero.
+  2. **You must pass explicit `start_date`/`end_date`, but they don't filter
+     cube data.** Windows of one year, all-time, and ending 2024-12-31 all
+     returned the identical 540 cards and 335,656 total games. `/data/filters`
+     `start_dates` gives `Cube - Powered` as 2026-08-26: the dataset is the
+     **current Arena cube run only**, cumulative. Send `2019-01-01`..today and
+     don't build a date picker.
+  3. **Sample sizes are thin.** One month into the 2026-08 run: median 237
+     GIH games per card, **only 6 of 540 cards had a public GIH WR**. `avg_pick`
+     (ATA) was null for 538. `avg_seen` (ALSA) was present for 532 and is the
+     one signal that is always usable. Refresh daily; more cards cross 500 as
+     the run goes on, and a new run resets everything.
 - **Etiquette:** serialise requests, ~1s apart, back off on failure, and **cache to
-  disk**. Refresh at most once a day. This is one small pull, but don't hammer it.
+  disk**. Refresh at most once a day. This is one small pull (~350KB), but don't
+  hammer it.
 - **Joining:** join on `name`. Normalise `///` → `//` for split/DFC cards and
-  strip surrounding whitespace. Log every unmatched card — with an MTGO cube list
+  strip surrounding whitespace. 17Lands lists DFCs by front face only
+  (`Delver of Secrets`, not `Delver of Secrets // Insectile Aberration`) and
+  split cards with both halves (`Life // Death`); names keep their accents
+  (`Palantír of Orthanc`). Log every unmatched card — with an MTGO cube list
   that differs from Arena's, the unmatched set is real information for the user
-  ("47 of 360 cards have no 17Lands data"), not just a warning to swallow.
+  ("55 of 238 cards have no 17Lands data"), not just a warning to swallow.
+  Observed on the Holiday 2013 Cube fixture against the 2026-08 Arena run:
+  183 of 238 matched.
 
 ---
 
@@ -239,7 +255,7 @@ src/mtgo_draft_assistant/
     config.py        # log_dir resolution: --log-dir > env > config.toml — DONE
     server.py        # stdlib http.server: UI, /api/state JSON, /events SSE — DONE
     __main__.py      # CLI entry point — DONE
-    ratings.py       # 17Lands fetch + disk cache + name join
+    ratings.py       # 17Lands fetch + disk cache + name join — DONE (M4)
     scryfall.py      # card colours/type/images — DONE; lazy per-card, SQLite + JPEG cache
                      # (deliberately NOT the bulk file: it is hundreds of MB and the
                      # user asked for low memory; a cube shows a few hundred names)
@@ -280,7 +296,9 @@ wanted later, prefer something with no build step.
 3. **M3 — Pool tracker.** Needs a cube list; until one is loaded, ship the
    seen/gone/in-flight view and be explicit that `UNSEEN` is unknown.
 4. **M4 — 17Lands.** Fetch, cache, join, display with sample-size gating and an
-   honest unmatched-card count.
+   honest unmatched-card count. **Done 2026-09-24**, built before M3 because it
+   needs no cube list. ALSA is the badge; GIH WR appears only where 17Lands
+   publishes it.
 5. **M5 — Match logs.** Re-verify the format markers in §2.3 against a current
    `Match_GameLog_*.dat` before writing any parser. Then personal WR and pod
    records.

@@ -11,7 +11,14 @@ import argparse
 import sys
 import webbrowser
 
-from .config import REPO_ROOT, ConfigError, resolve_log_dir
+from .config import REPO_ROOT, ConfigError, load_config, ratings_settings, resolve_log_dir
+from .ratings import (
+    DEFAULT_EXPANSION,
+    DEFAULT_FORMAT,
+    DEFAULT_MIN_GAMES,
+    DEFAULT_REFRESH_HOURS,
+    RatingsProvider,
+)
 from .scryfall import CardResolver
 from .server import DraftServer
 
@@ -27,9 +34,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--interval", type=float, default=0.5, help="poll interval in seconds")
     ap.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     ap.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR),
-                    help="where Scryfall card data and images are cached")
+                    help="where Scryfall card data, images and 17Lands ratings are cached")
     ap.add_argument("--no-cards", action="store_true",
                     help="offline mode: no Scryfall lookups, text-only cards")
+    ap.add_argument("--no-ratings", action="store_true",
+                    help="skip 17Lands ratings (also: enabled = false under [ratings] in config.toml)")
+    ap.add_argument("--ratings-expansion", default=None,
+                    help=f"17Lands expansion code (default from config.toml, else {DEFAULT_EXPANSION!r})")
+    ap.add_argument("--ratings-format", default=None,
+                    help=f"17Lands format (default from config.toml, else {DEFAULT_FORMAT!r})")
     ap.add_argument("--verbose", action="store_true", help="log HTTP requests")
     args = ap.parse_args(argv)
 
@@ -44,12 +57,30 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr, flush=True)
 
     resolver = None if args.no_cards else CardResolver(args.cache_dir)
+
+    rcfg = ratings_settings(load_config())
+    ratings = None
+    if not args.no_ratings and rcfg.get("enabled", True):
+        ratings = RatingsProvider(
+            args.cache_dir,
+            expansion=args.ratings_expansion or str(rcfg.get("expansion") or DEFAULT_EXPANSION),
+            fmt=args.ratings_format or str(rcfg.get("format") or DEFAULT_FORMAT),
+            refresh_hours=float(rcfg.get("refresh_hours", DEFAULT_REFRESH_HOURS)),
+            min_games=int(rcfg.get("min_games", DEFAULT_MIN_GAMES)),
+        )
+
     server = DraftServer(log_dir, host=args.host, port=args.port,
-                         interval=args.interval, verbose=args.verbose, resolver=resolver)
+                         interval=args.interval, verbose=args.verbose,
+                         resolver=resolver, ratings=ratings)
     server.start()
     print(f"MTGO Draft Assistant watching {log_dir or '(no directory set)'}", flush=True)
     if resolver is not None:
         print(f"Card data cached in {args.cache_dir}", flush=True)
+    if ratings is not None:
+        st = ratings.status()
+        have = f"{st['cards']} cards cached from {st['fetched_at']}" if st["cards"] else "no cache yet"
+        print(f"17Lands ratings: {ratings.expansion} / {ratings.format} ({have}; "
+              f"refreshed every {ratings.refresh_hours:g}h)", flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)

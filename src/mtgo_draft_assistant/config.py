@@ -7,12 +7,16 @@ so we don't read that. Resolution order:
   1. ``--log-dir`` on the command line
   2. ``MTGO_DRAFT_LOG_DIR`` environment variable
   3. ``log_dir`` in ``config.toml`` (current directory, then the repo root)
+
+``config.toml`` may also hold a ``[ratings]`` table for 17Lands (see
+``config.example.toml``).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import tomllib
 from pathlib import Path
 
@@ -39,21 +43,48 @@ def load_config() -> dict:
     return {}
 
 
+_LOG_DIR_LINE = re.compile(r"^\s*log_dir\s*=.*$", re.MULTILINE)
+
+
 def save_log_dir(log_dir: str | Path, path: Path | None = None) -> Path:
     """
     Persist the directory to config.toml (repo root by default) so the next
     start picks it up. Written with forward slashes, which TOML and Windows
-    both accept, so no escaping games.
+    both accept, so no escaping games. Anything else in the file (a
+    ``[ratings]`` table, comments) is kept as is.
     """
     target = path or (REPO_ROOT / CONFIG_NAME)
     value = str(Path(log_dir)).replace("\\", "/")
-    body = (
-        "# MTGO draft log directory: the path from MTGO's Settings -> Save Draft Log.\n"
-        "# Written by the web UI; edit by hand if you prefer.\n"
-        f"log_dir = {json.dumps(value, ensure_ascii=False)}\n"
-    )
+    line = f"log_dir = {json.dumps(value, ensure_ascii=False)}"
+    try:
+        existing = target.read_text(encoding="utf-8")
+    except OSError:
+        existing = None
+    if existing is None:
+        body = (
+            "# MTGO draft log directory: the path from MTGO's Settings -> Save Draft Log.\n"
+            "# Written by the web UI; edit by hand if you prefer.\n"
+            f"{line}\n"
+        )
+    elif _LOG_DIR_LINE.search(existing):
+        body = _LOG_DIR_LINE.sub(line, existing, count=1)
+    else:
+        # top-level keys must precede any [table]; put it first
+        body = f"{line}\n{existing}"
     target.write_text(body, encoding="utf-8")
     return target
+
+
+def ratings_settings(cfg: dict | None = None) -> dict:
+    """
+    The ``[ratings]`` table from config.toml, or ``{}``. Keys the CLI
+    understands: ``enabled`` (bool), ``expansion``, ``format``,
+    ``refresh_hours``, ``min_games``.
+    """
+    if cfg is None:
+        cfg = load_config()
+    table = cfg.get("ratings")
+    return dict(table) if isinstance(table, dict) else {}
 
 
 def resolve_log_dir(cli_value: str | None = None) -> Path:

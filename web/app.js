@@ -7,7 +7,12 @@
 
   const $ = (id) => document.getElementById(id);
   let cards = {};              // name -> info from the server
+  let ratings = {};            // name -> 17Lands numbers (only names with data)
   let lastCommitted = -1;      // to flash the newest pick
+
+  // whether the 17Lands badge is drawn on tiles
+  let showRatings = true;
+  try { showRatings = localStorage.getItem("showRatings") !== "0"; } catch (e) { /* ignore */ }
 
   // ---------------------------------------------------------------- utils
   function el(tag, cls, text) {
@@ -23,6 +28,41 @@
   function manaLabel(i) {
     if (!i || !i.mana_cost) return i && i.group === "L" ? "land" : "";
     return i.mana_cost.replace(/[{}]/g, "").replace(/ \/\/ .*/, "");
+  }
+  const fmtInt = (n) => (n === null || n === undefined) ? "?" : Number(n).toLocaleString();
+  const fmtPct = (x, d) => (x === null || x === undefined) ? "n/a" : (100 * x).toFixed(d === undefined ? 1 : d) + "%";
+  const fmt1 = (x) => (x === null || x === undefined) ? "n/a" : Number(x).toFixed(1);
+
+  // ---------------------------------------------------------- 17Lands
+  // Tooltip lines for one card. ALSA is the headline because it exists for
+  // nearly every cube card; win rates are null below 500 games and say so.
+  function ratingLines(name) {
+    const r = ratings[name];
+    if (!r) return [];
+    const meta = lastMeta || {};
+    const need = meta.min_games || 500;
+    const out = [];
+    out.push(`17Lands ${meta.expansion || ""}: ALSA ${fmt1(r.alsa)} (seen ${fmtInt(r.seen_count)}×) · ATA ${fmt1(r.ata)}`);
+    if (r.gih_wr !== null && r.gih_wr !== undefined) {
+      out.push(`GIH WR ${fmtPct(r.gih_wr)} · ${fmtInt(r.gih_games)} games · IWD ${r.iwd === null ? "n/a" : (r.iwd >= 0 ? "+" : "") + (100 * r.iwd).toFixed(1) + "pp"}`);
+      if (r.gp_wr !== null) out.push(`GP WR ${fmtPct(r.gp_wr)} · ${fmtInt(r.games)} games · OH WR ${fmtPct(r.oh_wr)}`);
+    } else {
+      out.push(`GIH WR n/a: ${fmtInt(r.gih_games)} games, 17Lands needs ${fmtInt(need)}`);
+    }
+    if (r.play_rate !== null) out.push(`play rate ${fmtPct(r.play_rate, 0)} of decks that had it`);
+    return out;
+  }
+  // The badge: ALSA, plus GIH WR when 17Lands publishes one. Class by how
+  // early the Arena pod takes it (percentile of ALSA within the dataset).
+  function ratingBadge(name) {
+    const r = ratings[name];
+    if (!r || r.alsa === null) return null;
+    const pct = r.alsa_pct === null ? 50 : r.alsa_pct;
+    const cls = pct >= 85 ? "r-hot" : (pct >= 55 ? "r-mid" : "r-low");
+    const b = el("div", `rate ${cls}`);
+    b.appendChild(el("span", "alsa", fmt1(r.alsa)));
+    if (r.gih_wr !== null && r.gih_wr !== undefined) b.appendChild(el("span", "wr", fmtPct(r.gih_wr, 0)));
+    return b;
   }
 
   // A card cell: the image alone when we have one, otherwise the name in a
@@ -57,9 +97,14 @@
     } else {
       showName();
     }
+    if (showRatings) {
+      const badge = ratingBadge(name);
+      if (badge) t.appendChild(badge);
+    }
     const lines = [name];
     if (i && i.type_line) lines.push(i.type_line + (i.mana_cost ? "  " + i.mana_cost : ""));
     if (title) lines.push(title);
+    for (const l of ratingLines(name)) lines.push(l);
     t.title = lines.join("\n");
     return t;
   }
@@ -163,6 +208,63 @@
     opts.appendChild(mk("lands", "lands"));
     box.appendChild(opts);
     box.appendChild(el("span", "total", `${total} taken · % = share of that colour that wheeled`));
+  }
+
+  // ------------------------------------------------------- ratings bar
+  // Dataset status plus the honest number: how many cards seen in this
+  // draft have no Arena data at all.
+  let lastMeta = null;
+  function renderRatingsBar(st) {
+    const bar = $("ratings-bar");
+    const meta = st.ratings_meta;
+    lastMeta = meta;
+    clear(bar);
+    bar.hidden = !meta;
+    if (!meta) return;
+    bar.className = "ratings " + meta.status;
+    bar.appendChild(el("span", "lbl", "17Lands"));
+    bar.appendChild(el("span", "ds", `${meta.expansion} · ${meta.format}`));
+    if (meta.status === "ok") {
+      const when = meta.age_hours === null ? "" : (meta.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(meta.age_hours)}h ago`);
+      bar.appendChild(el("span", "muted",
+        `${fmtInt(meta.cards)} cards · ${fmtInt(meta.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
+      const seen = Object.keys(st.ratings || {}).length + (st.ratings_unmatched || []).length;
+      if (seen) {
+        const miss = st.ratings_unmatched || [];
+        const u = el("span", miss.length ? "unmatched" : "muted",
+          miss.length ? `${miss.length} of ${seen} cards seen have no Arena data` : `all ${seen} cards seen have data`);
+        u.title = miss.length ? "No 17Lands entry for:\n" + miss.join("\n") : "";
+        bar.appendChild(u);
+      }
+    } else if (meta.status === "fetching") {
+      bar.appendChild(el("span", "muted", "downloading…"));
+    } else if (meta.status === "error") {
+      bar.appendChild(el("span", "err", `unavailable: ${meta.error}`));
+    } else {
+      bar.appendChild(el("span", "muted", "no data yet"));
+    }
+    if (meta.fetching && meta.status === "ok") bar.appendChild(el("span", "muted", "refreshing…"));
+
+    const lab = el("label", "opt");
+    const cb = el("input");
+    cb.type = "checkbox";
+    cb.checked = showRatings;
+    cb.addEventListener("change", () => {
+      showRatings = cb.checked;
+      try { localStorage.setItem("showRatings", showRatings ? "1" : "0"); } catch (e) { /* ignore */ }
+      render(lastState);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode("badges"));
+    lab.title = "Badge = ALSA (average pick at which the Arena pod last saw the card; lower = taken earlier)."
+      + "\nA second number is GIH WR, shown only when 17Lands has ≥500 games. Hover a card for the rest.";
+    bar.appendChild(lab);
+    const key = el("span", "key");
+    key.appendChild(el("i", "rate r-hot", "1.5"));
+    key.appendChild(document.createTextNode(" taken early "));
+    key.appendChild(el("i", "rate r-low", "9.0"));
+    key.appendChild(document.createTextNode(" wheels"));
+    bar.appendChild(key);
   }
 
   // -------------------------------------------------------------- header
@@ -403,8 +505,13 @@
     try { localStorage.setItem("picksOpen", picksPane.open ? "1" : "0"); } catch (e) { /* ignore */ }
   });
 
+  let lastState = null;
   function render(st) {
+    if (!st) return;
+    lastState = st;
     cards = st.cards || {};
+    ratings = st.ratings || {};
+    renderRatingsBar(st);
     renderHeader(st);
     renderTaken(st);
     renderCurrent(st);

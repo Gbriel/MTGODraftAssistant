@@ -2,3 +2,12 @@
 # MTGO: Settings -> "Save Draft Log". Backslashes need doubling in TOML,
 # or use forward slashes.
 log_dir = "C:/Users/you/MTGODraftLogs"
+
+# 17Lands ratings (Arena data for the Arena cube; partial overlap with the
+# MTGO cube). Everything here is optional; these are the defaults.
+[ratings]
+enabled = true
+expansion = "Cube - Powered"   # "Cube" is the unpowered Arena cube
+format = "PremierDraft"
+refresh_hours = 24             # re-download at most this often
+min_games = 500                # hide win rates below this many games (17Lands nulls them anyway)

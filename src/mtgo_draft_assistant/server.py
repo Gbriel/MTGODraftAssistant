@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
 from .config import save_log_dir
+from .ratings import CardRating, RatingsProvider
 from .scryfall import CardInfo, CardResolver
 from .watcher import DraftWatcher, Update, newest_log
 
@@ -53,8 +54,12 @@ def build_state(update: Update | None, analysis: Analysis | None,
                 log_dir: Path | None, version: int,
                 cards: dict[str, CardInfo] | None = None,
                 cards_pending: int = 0,
-                card_errors: list[str] | None = None) -> dict:
+                card_errors: list[str] | None = None,
+                ratings: dict[str, CardRating] | None = None,
+                ratings_meta: dict | None = None,
+                ratings_unmatched: list[str] | None = None) -> dict:
     """JSON-serialisable view of everything the UI needs."""
+    min_games = (ratings_meta or {}).get("min_games", 0)
     base = {
         "version": version,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
@@ -71,6 +76,11 @@ def build_state(update: Update | None, analysis: Analysis | None,
         "cards": {name: info.to_json() for name, info in (cards or {}).items()},
         "cards_pending": cards_pending,
         "card_errors": list(card_errors or []),
+        # 17Lands: per-card numbers for names in this draft, dataset status,
+        # and the names that have no Arena data (real information, not noise)
+        "ratings": {name: r.to_json(min_games) for name, r in (ratings or {}).items()},
+        "ratings_meta": ratings_meta,           # None when ratings are disabled
+        "ratings_unmatched": list(ratings_unmatched or []),
     }
     if update is None or analysis is None:
         return base
@@ -301,22 +311,27 @@ class DraftHTTPServer(ThreadingHTTPServer):
 class DraftServer:
     """
     Watcher thread + HTTP server thread sharing a StateStore, plus an optional
-    :class:`CardResolver` that fills in colours and images in the background.
+    :class:`CardResolver` that fills in colours and images in the background
+    and an optional :class:`RatingsProvider` for 17Lands numbers.
     Pass ``resolver=None`` for a text-only server (tests, offline use).
     """
 
     def __init__(self, log_dir: str | Path | None, host: str = "127.0.0.1", port: int = 8765,
                  interval: float = 0.5, verbose: bool = False,
                  resolver: CardResolver | None = None,
+                 ratings: RatingsProvider | None = None,
                  config_path: Path | None = None,
                  allow_config: bool = True) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.resolver = resolver
+        self.ratings = ratings
         self.config_path = config_path          # None -> default config.toml location
         if resolver is not None:
             resolver.on_change = self._on_cards_changed
-        self.store = StateStore(build_state(None, None, self.log_dir, 0))
+        if ratings is not None:
+            ratings.on_change = self._on_cards_changed
+        self.store = StateStore(self._idle_state(0))
         self.watcher = DraftWatcher(self.log_dir, interval=interval)
         self.httpd = DraftHTTPServer(
             (host, port), self.store, verbose=verbose,
@@ -341,25 +356,36 @@ class DraftServer:
     def url(self) -> str:
         return f"http://{self.host}:{self.port}/"
 
+    def _idle_state(self, version: int) -> dict:
+        meta = self.ratings.status() if self.ratings is not None else None
+        return build_state(None, None, self.log_dir, version, ratings_meta=meta)
+
     def _publish(self, update: Update, analysis: Analysis) -> None:
+        names = draft_card_names(update)
         cards: dict[str, CardInfo] = {}
         pending = 0
         errors: list[str] = []
         if self.resolver is not None:
-            names = draft_card_names(update)
             self.resolver.request(names)
             cards = self.resolver.lookup(names)
             pending = self.resolver.pending
             errors = self.resolver.errors[-5:]
+        ratings: dict[str, CardRating] = {}
+        meta = None
+        unmatched: list[str] = []
+        if self.ratings is not None:
+            ratings, unmatched = self.ratings.lookup(names)
+            meta = self.ratings.status()
         self.store.set(build_state(
             update, analysis, self.log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
+            ratings=ratings, ratings_meta=meta, ratings_unmatched=unmatched,
         ))
 
     def _publish_idle(self) -> None:
         with self._last_lock:
             self._last = None
-        self.store.set(build_state(None, None, self.log_dir, self.store.version + 1))
+        self.store.set(self._idle_state(self.store.version + 1))
 
     def _on_update(self, update: Update) -> None:
         analysis = analyse(update.draft)
@@ -408,7 +434,7 @@ class DraftServer:
         return {"ok": False, "error": "nothing to change (expected log_dir)"}
 
     def _on_cards_changed(self) -> None:
-        """Called from the resolver thread per card; coalesce into one push."""
+        """Called from the resolver/ratings threads; coalesce into one push."""
         with self._last_lock:
             if self._card_timer is not None:
                 return
@@ -420,12 +446,19 @@ class DraftServer:
         with self._last_lock:
             self._card_timer = None
             last = self._last
-        if last is not None and not self._stop.is_set():
+        if self._stop.is_set():
+            return
+        if last is not None:
             self._publish(*last)
+        else:
+            # no draft yet, but the ratings status line still wants updating
+            self.store.set(self._idle_state(self.store.version + 1))
 
     def start(self) -> None:
         if self.resolver is not None:
             self.resolver.start()
+        if self.ratings is not None:
+            self.ratings.start()
         # Prime synchronously so the first page load has data.
         first = self.watcher.poll()
         if first is not None:
@@ -454,6 +487,8 @@ class DraftServer:
             t.join(timeout=2)
         if self.resolver is not None:
             self.resolver.stop()
+        if self.ratings is not None:
+            self.ratings.stop()
 
     def wait(self) -> None:
         """Block the main thread until interrupted."""

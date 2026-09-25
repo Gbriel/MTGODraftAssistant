@@ -145,6 +145,7 @@ def test_sse_sends_current_state_then_updates(server):
 def test_text_only_server_has_empty_cards(server):
     st = json.loads(_get(server.url + "api/state")[2])
     assert st["cards"] == {} and st["cards_pending"] == 0
+    assert st["ratings"] == {} and st["ratings_meta"] is None and st["ratings_unmatched"] == []
     with pytest.raises(urllib.error.HTTPError) as ei:
         _get(server.url + "img/anything.jpg")
     assert ei.value.code == 404
@@ -185,6 +186,58 @@ def test_cards_resolve_and_images_served(tmp_path):
         assert status == 200 and headers["Content-Type"] == "image/jpeg" and body == JPEG
         with pytest.raises(urllib.error.HTTPError):
             _get(s.url + "img/../cards.sqlite")
+    finally:
+        s.stop()
+
+
+def test_ratings_in_state_with_unmatched_count(tmp_path):
+    from mtgo_draft_assistant.ratings import RatingsProvider
+    from test_ratings import ROWS, FakeClient as FakeRatingsClient, row
+
+    _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
+    rows = ROWS + [row("Mana Vault", alsa=2.2, gih_wr=0.58, gih_games=900)]
+    client = FakeRatingsClient(rows=rows)
+    ratings = RatingsProvider(tmp_path / "cache", client=client)
+    s = DraftServer(tmp_path, port=0, interval=0.05, ratings=ratings)
+    s.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["ratings_meta"] and st["ratings_meta"]["status"] == "ok" and st["ratings"]:
+                break
+            time.sleep(0.05)
+        meta = st["ratings_meta"]
+        assert meta["status"] == "ok" and meta["expansion"] == "Cube - Powered"
+        assert meta["cards"] == len(rows) and meta["with_win_rate"] == 3
+        vault = st["ratings"]["Mana Vault"]
+        assert vault["alsa"] == 2.2 and vault["gih_wr"] == 0.58 and vault["gih_games"] == 900
+        assert st["ratings"]["Mother of Runes"]["gih_wr"] is None
+        names = {c for p in st["picks"] for c in p["available"]} | set(st["current_pack"]["cards"])
+        matched = set(st["ratings"])
+        assert matched <= names
+        assert set(st["ratings_unmatched"]) == names - matched
+        assert "Dark Ritual" in st["ratings_unmatched"]
+        assert len(client.calls) == 1
+    finally:
+        s.stop()
+
+
+def test_ratings_status_reaches_idle_state(tmp_path):
+    from mtgo_draft_assistant.ratings import RatingsProvider
+    from test_ratings import FakeClient as FakeRatingsClient
+
+    ratings = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient())
+    s = DraftServer(None, port=0, interval=0.05, ratings=ratings, config_path=tmp_path / "c.toml")
+    s.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["ratings_meta"]["status"] == "ok":
+                break
+            time.sleep(0.05)
+        assert st["ratings_meta"]["status"] == "ok" and st["position"]["status"] == "idle"
     finally:
         s.stop()
 
