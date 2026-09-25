@@ -11,6 +11,8 @@ shows, in a browser tab:
   and how many cards it will have.
 - **A colour tally** of what the pod has taken, with the share of each colour
   that wheeled.
+- **A pool tracker**: every card's fate from your seat, with a search box for
+  "is Sol Ring still live?" (see below).
 - **Your picks**, in a collapsible drawer.
 - **17Lands numbers** on every card the Arena cube shares with yours (see
   below).
@@ -50,6 +52,26 @@ Card colours and images come from [Scryfall](https://scryfall.com), fetched
 lazily as cards appear and cached forever in `data/cache/`. The first draft with
 a new cube takes a minute or so to fill in; after that it's instant. Run with
 `--no-cards` for a text-only offline mode.
+
+## Pool tracker
+
+The Pool pane sorts every card into one of five states: **on screen**, **in
+flight** (you passed it and its pack is due back), **unseen**, **gone** (the pod
+took it, or its pack will not come round again), and **mine**. Filters toggle
+the states; the search box finds a card whatever its state.
+
+"Unseen" needs a cube list. Put one in `config.toml`:
+
+```toml
+[cube]
+list = "https://www.mtgo.com/vintage-cube-cardlist"   # or a text file, one card per line
+```
+
+or pass `--cube PATH_OR_URL`. A URL is fetched once and cached for a week. In
+`--arena` mode the 17Lands card list is used automatically. If many cards you
+see are not in the list, the pane says so, because "unseen" then means
+nothing. Without a list the pane still tracks seen, in-flight and gone cards
+and says plainly that the rest cannot be enumerated.
 
 ## MTG Arena
 
@@ -98,6 +120,7 @@ python -m mtgo_draft_assistant --help
   --log-dir DIR             draft log folder (otherwise config.toml or the web page)
   --arena                   watch MTG Arena's Player.log instead
   --arena-log PATH          where that log is, if not the default
+  --cube PATH_OR_URL        cube card list for the pool tracker
   --port 8765               local port
   --no-browser              don't open a tab
   --no-cards                skip Scryfall; names only

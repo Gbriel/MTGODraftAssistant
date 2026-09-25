@@ -223,6 +223,7 @@ def in_flight(draft: Draft, n: int | None = None) -> list[InFlight]:
     if size is None:
         return []
 
+    by = _by_position(draft)
     out: list[InFlight] = []
     for p in draft.picks:
         if p.pack != cur_pack or not p.complete or p.picked is None:
@@ -230,8 +231,10 @@ def in_flight(draft: Draft, n: int | None = None) -> list[InFlight]:
         due = p.pick + n
         if due > size:
             continue                # never wheels
-        if due <= cur_pick:
+        if (p.pack, due) in by:
             continue                # already back (it's a wheel diff now)
+        # note: a pack due at the next pick, while MTGO has not written that
+        # block yet, is still in flight (picks_until_return == 0: due now)
         out.append(InFlight(
             pack=p.pack,
             first_pick=p.pick,

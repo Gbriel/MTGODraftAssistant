@@ -30,6 +30,8 @@ from urllib.parse import urlsplit
 from .analysis import Analysis, analyse
 from .arena_log import ArenaWatcher
 from .config import save_log_dir
+from .cube_list import CubeList, from_names
+from .pool import PoolReport, pool_state
 from .ratings import CardRating, RatingsProvider
 from .scryfall import CardInfo, CardResolver
 from .watcher import DraftWatcher, Update, newest_log
@@ -58,7 +60,8 @@ def build_state(update: Update | None, analysis: Analysis | None,
                 card_errors: list[str] | None = None,
                 ratings: dict[str, CardRating] | None = None,
                 ratings_meta: dict | None = None,
-                ratings_unmatched: list[str] | None = None) -> dict:
+                ratings_unmatched: list[str] | None = None,
+                pool: PoolReport | None = None) -> dict:
     """JSON-serialisable view of everything the UI needs."""
     min_games = (ratings_meta or {}).get("min_games", 0)
     base = {
@@ -82,6 +85,7 @@ def build_state(update: Update | None, analysis: Analysis | None,
         "ratings": {name: r.to_json(min_games) for name, r in (ratings or {}).items()},
         "ratings_meta": ratings_meta,           # None when ratings are disabled
         "ratings_unmatched": list(ratings_unmatched or []),
+        "pool": pool.to_json() if pool is not None else None,
     }
     if update is None or analysis is None:
         return base
@@ -325,11 +329,15 @@ class DraftServer:
                  ratings: RatingsProvider | None = None,
                  config_path: Path | None = None,
                  allow_config: bool = True,
-                 watcher: DraftWatcher | ArenaWatcher | None = None) -> None:
+                 watcher: DraftWatcher | ArenaWatcher | None = None,
+                 cube: CubeList | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.resolver = resolver
         self.ratings = ratings
+        self.cube = cube                        # explicit list; else 17Lands's in Arena mode
+        self._cube_from_ratings: CubeList | None = None
+        self._cube_requested = False
         self.config_path = config_path          # None -> default config.toml location
         if resolver is not None:
             resolver.on_change = self._on_cards_changed
@@ -387,14 +395,37 @@ class DraftServer:
             return self.resolver.arena_name(grp_id)
         return None
 
+    def current_cube(self) -> CubeList | None:
+        """The explicit cube list, or in Arena mode the 17Lands card list."""
+        if self.cube is not None:
+            return self.cube
+        if self.arena and self.ratings is not None:
+            ds = self.ratings.dataset
+            if ds is not None and (self._cube_from_ratings is None
+                                   or len(self._cube_from_ratings) != len(ds)
+                                   or self._cube_from_ratings.fetched_at != ds.fetched_at):
+                cl = from_names(list(ds.cards), f"17Lands {ds.expansion}")
+                cl.fetched_at = ds.fetched_at
+                self._cube_from_ratings = cl
+                self._cube_requested = False
+            return self._cube_from_ratings
+        return None
+
     def _publish(self, update: Update, analysis: Analysis) -> None:
         names = draft_card_names(update)
+        cube = self.current_cube()
+        pool = pool_state(update.draft, analysis, cube)
         cards: dict[str, CardInfo] = {}
         pending = 0
         errors: list[str] = []
         if self.resolver is not None:
             self.resolver.request(names)
-            cards = self.resolver.lookup(names)
+            if cube is not None and not self._cube_requested:
+                # after the draft's own cards: colours and images for the unseen list
+                self.resolver.request(cube.cards)
+                self._cube_requested = True
+            wanted = names + ([c.name for c in pool.cards if c.state == "unseen"] if cube else [])
+            cards = self.resolver.lookup(wanted)
             pending = self.resolver.pending
             errors = self.resolver.errors[-5:]
         ratings: dict[str, CardRating] = {}
@@ -407,6 +438,7 @@ class DraftServer:
             update, analysis, self.log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=meta, ratings_unmatched=unmatched,
+            pool=pool,
         )))
 
     def _publish_idle(self) -> None:

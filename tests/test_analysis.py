@@ -165,17 +165,20 @@ def test_in_flight_across_all_snapshots():
         cur_pack, cur_pick = current_position(d)
         sizes = pack_sizes(d)
         flights = in_flight(d)
+        by = {(p.pack, p.pick) for p in d.picks}
         for f in flights:
             assert f.pack == cur_pack
             assert f.due_pick == f.first_pick + n
-            assert f.due_pick > cur_pick
+            # due now (waiting for MTGO to write it) counts as still in flight
+            assert f.due_pick >= cur_pick
             assert f.due_pick <= sizes[cur_pack]
             assert f.picks_until_return == f.due_pick - cur_pick
             assert f.your_pick not in f.passed
+            assert (cur_pack, f.due_pick) not in by
         expected = [
             p for p in d.picks
             if p.pack == cur_pack and p.complete
-            and cur_pick < p.pick + n <= sizes[cur_pack]
+            and p.pick + n <= sizes[cur_pack] and (cur_pack, p.pick + n) not in by
         ]
         assert [f.first_pick for f in flights] == [p.pick for p in expected], path
 

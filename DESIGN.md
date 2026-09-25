@@ -301,7 +301,9 @@ src/mtgo_draft_assistant/
     draft_log.py     # parser — WRITTEN AND TESTED, see tests/
     arena_log.py     # Arena Player.log parser + tail watcher -> same Draft — DONE
     watcher.py       # poll the draft dir, emit state on change — DONE (M1)
-    analysis.py      # wheel diff, in-flight — DONE (M2); pool state — M3
+    analysis.py      # wheel diff, in-flight, pod size inference — DONE (M2)
+    pool.py          # per-card state from your seat — DONE (M3)
+    cube_list.py     # cube lists from file / URL table / 17Lands — DONE (M3)
     config.py        # log_dir resolution: --log-dir > env > config.toml — DONE
     server.py        # stdlib http.server: UI, /api/state JSON, /events SSE — DONE
     __main__.py      # CLI entry point — DONE
@@ -345,6 +347,9 @@ wanted later, prefer something with no build step.
    at which the tool becomes worth opening during a draft.
 3. **M3 — Pool tracker.** Needs a cube list; until one is loaded, ship the
    seen/gone/in-flight view and be explicit that `UNSEEN` is unknown.
+   **Done 2026-09-24.** Lists come from a file, the mtgo.com cube page, or
+   17Lands (Arena). The tracker reports seen-but-not-listed cards as the
+   signal that the list is wrong.
 4. **M4 — 17Lands.** Fetch, cache, join, display with sample-size gating and an
    honest unmatched-card count. **Done 2026-09-24**, built before M3 because it
    needs no cube list. ALSA is the badge; GIH WR appears only where 17Lands

@@ -3,6 +3,14 @@
 # or use forward slashes.
 log_dir = "C:/Users/you/MTGODraftLogs"
 
+# Cube list for the pool tracker: which cards could still turn up. A path to
+# a text file (one card per line) or a URL with a Color | Card table, e.g.
+# the official MTGO Vintage Cube list. Optional: without it the tracker still
+# shows seen / in-flight / gone, but cannot list what you have never seen.
+# In --arena mode the 17Lands card list is used automatically when unset.
+[cube]
+list = "https://www.mtgo.com/vintage-cube-cardlist"
+
 # 17Lands ratings (Arena data for the Arena cube; partial overlap with the
 # MTGO cube). Everything here is optional; these are the defaults.
 [ratings]

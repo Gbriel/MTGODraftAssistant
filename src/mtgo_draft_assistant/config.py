@@ -75,6 +75,14 @@ def save_log_dir(log_dir: str | Path, path: Path | None = None) -> Path:
     return target
 
 
+def cube_settings(cfg: dict | None = None) -> dict:
+    """The ``[cube]`` table: ``list`` is a path or URL of the cube card list."""
+    if cfg is None:
+        cfg = load_config()
+    table = cfg.get("cube")
+    return dict(table) if isinstance(table, dict) else {}
+
+
 def ratings_settings(cfg: dict | None = None) -> dict:
     """
     The ``[ratings]`` table from config.toml, or ``{}``. Keys the CLI

@@ -311,6 +311,64 @@ def test_arena_mode_end_to_end(tmp_path):
     assert len(arena_lookups) == len(set(arena_lookups))
 
 
+def test_pool_in_state_without_and_with_cube_list(tmp_path):
+    from mtgo_draft_assistant.cube_list import CubeList
+
+    _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
+    s = DraftServer(tmp_path, port=0, interval=0.05, config_path=tmp_path / "u.toml")
+    s.start()
+    try:
+        st = json.loads(_get(s.url + "api/state")[2])
+        pool = st["pool"]
+        assert pool["cube"] is None and "no cube list" in pool["note"]
+        assert pool["counts"]["mine"] == 15 and pool["counts"]["on_screen"] == 15
+        assert pool["counts"]["unseen"] == 0
+        assert {c["name"] for c in pool["cards"] if c["state"] == "on_screen"} == set(st["current_pack"]["cards"])
+    finally:
+        s.stop()
+
+    cube = CubeList("My Cube", "file", ["Mana Vault", "Black Lotus", "Never Printed Alpha", "Never Printed Beta"])
+    s2 = DraftServer(tmp_path, port=0, interval=0.05, config_path=tmp_path / "u.toml", cube=cube)
+    s2.start()
+    try:
+        st = json.loads(_get(s2.url + "api/state")[2])
+        pool = st["pool"]
+        assert pool["cube"]["name"] == "My Cube" and pool["cube"]["size"] == 4
+        unseen = [c["name"] for c in pool["cards"] if c["state"] == "unseen"]
+        assert unseen == ["Never Printed Alpha", "Never Printed Beta"]
+        assert len(pool["cube"]["unmatched"]) > 100      # this tiny list is not the draft's cube
+        assert "probably not this draft's cube" in pool["note"]
+    finally:
+        s2.stop()
+
+
+def test_arena_mode_uses_17lands_list_as_cube(tmp_path):
+    from mtgo_draft_assistant.arena_log import ArenaWatcher
+    from mtgo_draft_assistant.ratings import RatingsProvider
+    from test_ratings import FakeClient as FakeRatingsClient, row
+
+    log = tmp_path / "Player.log"
+    shutil.copyfile(ARENA_COMPLETE, log)
+    rows = [row("Bristly Bill, Spine Sower", alsa=3.0, mtga_id=90503),
+            row("Never Printed Alpha", alsa=9.0, mtga_id=1)]
+    ratings = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=rows))
+    s = DraftServer(None, port=0, interval=0.05, ratings=ratings, watcher=ArenaWatcher(log, interval=0.05))
+    s.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            if st["pool"] and st["pool"]["cube"]:
+                break
+            time.sleep(0.05)
+        pool = st["pool"]
+        assert pool["cube"]["source"] == "17lands" and pool["cube"]["name"] == "17Lands Cube - Powered"
+        assert [c["name"] for c in pool["cards"] if c["state"] == "unseen"] == ["Never Printed Alpha"]
+        assert pool["counts"]["mine"] == 45
+    finally:
+        s.stop()
+
+
 def _post(url: str, payload: dict) -> tuple[int, dict]:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",

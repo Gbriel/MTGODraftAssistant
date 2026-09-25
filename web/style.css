@@ -225,6 +225,59 @@ body {
 .upcoming-row.unseen .pick { color: var(--muted); }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
+/* pool tracker */
+.pane.pool { margin-top: 16px; min-height: 0; }
+.pane.pool h2 { flex-wrap: wrap; row-gap: 6px; }
+.filters { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 6px; }
+.chip-btn {
+  font: 12px var(--mono);
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--pane-2);
+  color: var(--muted);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.chip-btn.on { color: var(--fg); border-color: var(--accent); }
+.chip-btn.on.s-in_flight { border-color: var(--flight); color: var(--flight); }
+.chip-btn.on.s-gone { border-color: var(--gone); color: var(--gone); }
+.chip-btn.on.s-mine { border-color: var(--mine); color: var(--mine); }
+.chip-btn.on.s-on_screen { border-color: var(--accent); color: var(--accent); }
+.chip-btn.on.s-unseen { border-color: var(--fg); color: var(--fg); }
+#pool-search {
+  margin-left: auto;
+  font: 13px var(--mono);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+  min-width: 200px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pool-cube { font-family: var(--mono); font-size: 12px; margin: -4px 0 6px; }
+.pool-cube:empty { display: none; }
+.pool-note { color: #f0c890; font-size: 12px; margin: 0 0 8px; }
+/* pool tile markers: in flight = purple ring, on screen = blue frame */
+.tile.flight { position: relative; }
+.tile.flight::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px dashed var(--flight);
+  box-shadow: 0 0 0 1.5px rgba(0,0,0,.7);
+  pointer-events: none;
+}
+.tile.screen { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+
 details.picks { margin-top: 16px; min-height: 0; }
 details.picks summary { cursor: pointer; list-style: none; }
 details.picks summary::-webkit-details-marker { display: none; }

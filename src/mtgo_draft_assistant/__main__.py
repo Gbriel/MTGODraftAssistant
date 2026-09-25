@@ -15,7 +15,15 @@ from pathlib import Path
 
 from .arena_log import DEFAULT_LOG as DEFAULT_ARENA_LOG
 from .arena_log import ArenaWatcher
-from .config import REPO_ROOT, ConfigError, load_config, ratings_settings, resolve_log_dir
+from .config import (
+    REPO_ROOT,
+    ConfigError,
+    cube_settings,
+    load_config,
+    ratings_settings,
+    resolve_log_dir,
+)
+from .cube_list import load as load_cube
 from .ratings import (
     DEFAULT_EXPANSION,
     DEFAULT_FORMAT,
@@ -52,6 +60,9 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"17Lands expansion code (default from config.toml, else {DEFAULT_EXPANSION!r})")
     ap.add_argument("--ratings-format", default=None,
                     help=f"17Lands format (default from config.toml, else {DEFAULT_FORMAT!r})")
+    ap.add_argument("--cube", default=None,
+                    help="cube card list: a text file (one name per line) or a URL with a "
+                         "Color | Card table (default from [cube] list in config.toml)")
     ap.add_argument("--verbose", action="store_true", help="log HTTP requests")
     args = ap.parse_args(argv)
 
@@ -75,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
 
     resolver = None if args.no_cards else CardResolver(args.cache_dir)
 
-    rcfg = ratings_settings(load_config())
+    cfg = load_config()
+    rcfg = ratings_settings(cfg)
     ratings = None
     if not args.no_ratings and rcfg.get("enabled", True):
         ratings = RatingsProvider(
@@ -86,10 +98,22 @@ def main(argv: list[str] | None = None) -> int:
             min_games=int(rcfg.get("min_games", DEFAULT_MIN_GAMES)),
         )
 
+    cube = None
+    cube_spec = args.cube or cube_settings(cfg).get("list")
+    if cube_spec:
+        try:
+            cube = load_cube(str(cube_spec), args.cache_dir)
+        except Exception as e:  # a missing file or a dead URL should not stop the tracker
+            print(f"warning: cube list {cube_spec!r} not loaded: {e}", file=sys.stderr, flush=True)
+
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
-                         resolver=resolver, ratings=ratings, watcher=watcher)
+                         resolver=resolver, ratings=ratings, watcher=watcher, cube=cube)
     server.start()
+    if cube is not None:
+        print(f"Cube list: {cube.name} ({len(cube)} cards, {cube.source})", flush=True)
+    elif args.arena and ratings is not None:
+        print("Cube list: 17Lands card list (Arena cube)", flush=True)
     if args.arena:
         print(f"MTGO Draft Assistant watching Arena log {watcher.log_path}", flush=True)
     else:

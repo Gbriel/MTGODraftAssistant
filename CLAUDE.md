@@ -98,8 +98,15 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
 - Tests: `test_replay.py`, `test_corpus.py`, `test_watcher.py`,
   `test_analysis.py`, `test_arena.py`, `test_scryfall.py`, `test_ratings.py`,
   `test_server.py`, `test_config.py` — all passing, no network needed.
-- **Next: M3** pool tracker (needs a cube list). M5 match logs last, after
-  re-verifying the format.
+- **M3 done** — `pool.py` puts every card in one of mine / on_screen /
+  in_flight / gone (with a reason) / unseen; `cube_list.py` loads a list from
+  a text file, a Color|Card HTML table URL (the official MTGO Vintage Cube
+  page, cached weekly), or the 17Lands dataset (automatic in `--arena`
+  mode). The pane reports how many seen cards are missing from the list and
+  refuses to pretend "unseen" means anything when the list is wrong.
+  `[cube] list` in `config.toml` or `--cube`.
+- **Next: M5** match logs, after re-verifying the format markers in
+  DESIGN.md §2.3 against a current `Match_GameLog_*.dat`.
 
 The server is stdlib on purpose (one page, one stream, one local client); a
 framework has not earned its place yet. Revisit if the API grows.
