@@ -55,6 +55,8 @@ class Draft:
     players: list[str] = field(default_factory=list)
     set_name: str | None = None
     picks: list[Pick] = field(default_factory=list)
+    pod_size_hint: int | None = None   # for logs with no player list (Arena); see analysis.pod_size
+    source: str = "mtgo"               # "mtgo" | "arena"
 
     @property
     def pool(self) -> list[str]:

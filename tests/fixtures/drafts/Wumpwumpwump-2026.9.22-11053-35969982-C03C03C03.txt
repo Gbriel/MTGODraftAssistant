@@ -1,0 +1,582 @@
+Event #: 11053
+Time:    9/22/2026 9:15:11 AM
+Players:
+    mtgotogo
+    mohdikmal
+    Balrog_
+    makyorihiro
+    fede1
+    kollaps
+    CoPFascism
+--> Wumpwumpwump
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 1:
+--> Mox Diamond
+    Cabal Ritual
+    Thraben Inspector
+    Thundertrap Trainer
+    Barrowgoyf
+    Generous Plunderer
+    Bristly Bill, Spine Sower
+    Triplicate Titan
+    Teferi, Hero of Dominaria
+    Xander's Lounge
+    Blooming Marsh
+    Sear
+    Fabled Passage
+    Umezawa's Jitte
+    Misty Rainforest
+
+Picked: Mox Diamond
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Fireblast
+    Through the Breach
+    Night Nurse, Healer of Heroes
+    Mana Leak
+--> Necromancy
+    Sentinel of the Nameless City
+    Palantír of Orthanc
+    Lurrus of the Dream-Den
+    Spirebluff Canal
+    Wight of the Reliquary
+    Goblin Bombardment
+    Stormchaser's Talent
+    Mystic Forge
+    Avacyn's Pilgrim
+
+Picked: Necromancy
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Balance
+    Skyclave Apparition
+--> Stock Up
+    Toxic Deluge
+    Flame Slash
+    Worldspine Wurm
+    Talisman of Progress
+    Seachrome Coast
+    Vivi Ornitier
+    Blazemire Verge
+    Cryogen Relic
+    Talon Gates of Madara
+    Hedge Maze
+
+Picked: Stock Up
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Llanowar Elves
+--> Wheel of Fortune
+    Sanguine Evangelist
+    Spell Pierce
+    Talisman of Curiosity
+    Sage of the Skies
+    Undercity Sewers
+    Black Widow, Super Spy
+    Orcish Lumberjack
+    Bolas's Citadel
+    Super Shredder
+    Generous Ent
+
+Picked: Wheel of Fortune
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+--> Vampiric Tutor
+    Portable Hole
+    Quantum Riddler
+    Dragon's Rage Channeler
+    Titania, Protector of Argoth
+    Soul-Guide Lantern
+    Raffine's Tower
+    Thundering Falls
+    Badlands
+    Aether Spellbomb
+    Smuggler's Copter
+
+Picked: Vampiric Tutor
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Parallax Wave
+--> Dark Ritual
+    Unexpectedly Absent
+    Delighted Halfling
+    Teferi, Time Raveler
+    Baleful Strix
+    Carnage Interpreter
+    Stomping Ground
+    Forensic Gadgeteer
+    Urborg, Tomb of Yawgmoth
+
+Picked: Dark Ritual
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Mishra's Workshop
+    Glimmer Lens
+    Grief
+    Suplex
+    Kaldra Compleat
+    Ephemerate
+--> Sedgemoor Witch
+    Paradoxical Outcome
+    Temple Garden
+
+Picked: Sedgemoor Witch
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Yawgmoth's Will
+    Serra Paragon
+    Talisman of Dominance
+    Scrubland
+--> Blackcleave Cliffs
+    Chainsaw
+    Survival of the Fittest
+    Haywire Mite
+
+Picked: Blackcleave Cliffs
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 2:
+    Cabal Ritual
+    Thraben Inspector
+    Bristly Bill, Spine Sower
+    Triplicate Titan
+--> Xander's Lounge
+    Blooming Marsh
+    Fabled Passage
+
+Picked: Xander's Lounge
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+    Through the Breach
+    Night Nurse, Healer of Heroes
+--> Spirebluff Canal
+    Goblin Bombardment
+    Mystic Forge
+    Avacyn's Pilgrim
+
+Picked: Spirebluff Canal
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+    Seachrome Coast
+--> Blazemire Verge
+    Cryogen Relic
+    Talon Gates of Madara
+    Hedge Maze
+
+Picked: Blazemire Verge
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+    Sanguine Evangelist
+--> Bolas's Citadel
+    Super Shredder
+    Generous Ent
+
+Picked: Bolas's Citadel
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+    Thundering Falls
+--> Badlands
+    Smuggler's Copter
+
+Picked: Badlands
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+    Unexpectedly Absent
+--> Urborg, Tomb of Yawgmoth
+
+Picked: Urborg, Tomb of Yawgmoth
+
+------ Pack 1: Holiday 2013 Cube ------ 
+
+Pack 1 pick 3:
+--> Paradoxical Outcome
+
+Picked: Paradoxical Outcome
+
+Pack 2 pick 1:
+    Upheaval
+    Imperial Seal
+    Elspeth, Storm Slayer
+    Daze
+--> Duress
+    Robber of the Rich
+    Ignoble Hierarch
+    Currency Converter
+    Concealed Courtyard
+    Lutri, the Spellchaser
+    Overlord of the Balemurk
+    Zirda, the Dawnwaker
+    Melded Moxite
+    Dark Depths
+    Sowing Mycospawn
+
+Picked: Duress
+
+Pack 2 pick 2:
+    Chain Lightning
+    Natural Order
+    Guide of Souls
+--> Hullbreacher
+    Infernal Grasp
+    Tersa Lightshatter
+    Noble Hierarch
+    Manifold Key
+    Flooded Strand
+    Troll of Khazad-dûm
+    Commercial District
+    Phyrexian Metamorph
+    Iron Man Armor
+    Tropical Island
+
+Picked: Hullbreacher
+
+Pack 2 pick 2:
+    Karakas
+--> Underworld Breach
+    Phelia, Exuberant Shepherd
+    Occult Epiphany
+    Shallow Grave
+    Detective's Phoenix
+    Tireless Tracker
+    No More Lies
+    Third Path Iconoclast
+    Alpha Deathclaw
+    Wan Shi Tong, All-Knowing
+    Skateboard
+    Channel
+
+Picked: Underworld Breach
+
+Pack 2 pick 2:
+    Giver of Runes
+    Force of Negation
+    Fatal Push
+    Seasoned Pyromancer
+    Malevolent Rumble
+    Expedition Map
+    Eagles of the North
+    Raucous Theater
+--> Arid Mesa
+    Painter's Servant
+    Exhume
+    Tamiyo, Collector of Tales
+
+Picked: Arid Mesa
+
+Pack 2 pick 2:
+    Sneak Attack
+    Loran of the Third Path
+    Ledger Shredder
+    Life // Death
+    Abrade
+    Pest Infestation
+    Hallowed Fountain
+    Etali, Primal Conqueror
+    Scrapwork Mutt
+    Leyline Binding
+--> Windswept Heath
+
+Picked: Windswept Heath
+
+Pack 2 pick 2:
+    Overlord of the Mistmoors
+    Mystic Confluence
+    Sylvan Caryatid
+--> Relic of Sauron
+    Meticulous Archive
+    Zagoth Triome
+    Jetmir's Garden
+    Thopter Foundry
+    Prismatic Ending
+    Breeding Pool
+
+Picked: Relic of Sauron
+
+Pack 2 pick 2:
+    Show and Tell
+    Iron-Shield Elf
+    Voldaren Epicure
+    Godless Shrine
+    Saheeli, Sublime Artificer
+    Underground Mortuary
+    Elegant Parlor
+--> Leovold, Emissary of Trest
+    Waterlogged Grove
+
+Picked: Leovold, Emissary of Trest
+
+Pack 2 pick 2:
+    Get Lost
+    Faerie Mastermind
+    Everflowing Chalice
+    Damn
+    Master of Death
+    Pillage the Bog
+    Arena of Glory
+--> Spara's Headquarters
+
+Picked: Spara's Headquarters
+
+Pack 2 pick 2:
+    Upheaval
+--> Imperial Seal
+    Robber of the Rich
+    Concealed Courtyard
+    Overlord of the Balemurk
+    Zirda, the Dawnwaker
+    Melded Moxite
+
+Picked: Imperial Seal
+
+Pack 2 pick 3:
+    Infernal Grasp
+    Tersa Lightshatter
+    Manifold Key
+--> Troll of Khazad-dûm
+    Commercial District
+    Phyrexian Metamorph
+
+Picked: Troll of Khazad-dûm
+
+Pack 2 pick 3:
+--> Shallow Grave
+    Detective's Phoenix
+    Third Path Iconoclast
+    Skateboard
+    Channel
+
+Picked: Shallow Grave
+
+Pack 2 pick 3:
+    Giver of Runes
+    Expedition Map
+    Eagles of the North
+--> Exhume
+
+Picked: Exhume
+
+Pack 2 pick 3:
+--> Sneak Attack
+    Etali, Primal Conqueror
+    Scrapwork Mutt
+
+Picked: Sneak Attack
+
+Pack 2 pick 3:
+    Overlord of the Mistmoors
+--> Zagoth Triome
+
+Picked: Zagoth Triome
+
+Pack 2 pick 3:
+--> Voldaren Epicure
+
+Picked: Voldaren Epicure
+
+Pack 3 pick 1:
+    Mother of Runes
+    Brain Freeze
+    The Wandering Emperor
+    Thought Scour
+--> Archon of Cruelty
+    Gau, Feral Youth
+    Birds of Paradise
+    The One Ring
+    Sunfall
+    Watery Grave
+    Bloodtithe Harvester
+    Savai Triome
+    Emry, Lurker of the Loch
+    Town Greeter
+    Lush Portico
+
+Picked: Archon of Cruelty
+
+Pack 3 pick 2:
+    Path to Exile
+--> Demonic Tutor
+    Voice of Victory
+    Time Warp
+    Bone Shards
+    Headliner Scarlett
+    Elvish Mystic
+    Tidehollow Sculler
+    Creeping Tar Pit
+    Chain of Smog
+    Sunbaked Canyon
+    Goblin Engineer
+    Zuran Orb
+    Mutagen Man, Living Ooze
+
+Picked: Demonic Tutor
+
+Pack 3 pick 2:
+    Flickerwisp
+--> Timetwister
+    Oust
+    Miscalculation
+    Night's Whisper
+    Cori-Steel Cutter
+    Springheart Nantuko
+    Superior Spider-Man
+    Witherbloom Apprentice
+    Inspiring Vantage
+    Thassa's Oracle
+    Phyrexian Dragon Engine
+    Botanical Sanctum
+
+Picked: Timetwister
+
+Pack 3 pick 2:
+    Mind Twist
+    Staff of the Storyteller
+    Tamiyo, Inquisitive Student
+--> Animate Dead
+    Galvanic Discharge
+    Baloth Prime
+    The Mightstone and Weakstone
+    Shorikai, Genesis Engine
+    Wan Shi Tong, Librarian
+    Sacred Foundry
+    Thespian's Stage
+    Indatha Triome
+
+Picked: Animate Dead
+
+Pack 3 pick 2:
+--> Grim Monolith
+    Elite Spellbinder
+    Counterspell
+    Dismember
+    Coveted Jewel
+    Cloak and Dagger, Entwined
+    Lórien Revealed
+    Overgrown Tomb
+    Wrenn and Six
+    Damnation
+    Shifting Woodland
+
+Picked: Grim Monolith
+
+Pack 3 pick 2:
+    Oath of Druids
+    Jacked Rabbit
+    Jace, the Mind Sculptor
+--> Inquisition of Kozilek
+    Unholy Heat
+    Riverpyre Verge
+    Twilight Diviner
+    Copperline Gorge
+    Jennifer Walters
+    Uro, Titan of Nature's Wrath
+
+Picked: Inquisition of Kozilek
+
+Pack 3 pick 2:
+    Tendrils of Agony
+    Mana Tithe
+--> Metamorphosis Fanatic
+    Scythecat Cub
+    Nettlecyst
+    Lingering Souls
+    Sink into Stupor
+    Loot, the Pathfinder
+    Arwen, Mortal Queen
+
+Picked: Metamorphosis Fanatic
+
+Pack 3 pick 2:
+    Recurring Nightmare
+    Adeline, Resplendent Cathar
+--> Cut Down
+    Candelabra of Tawnos
+    Hogaak, Arisen Necropolis
+    High Tide
+    Bloodchief's Thirst
+    Razorverge Thicket
+
+Picked: Cut Down
+
+Pack 3 pick 2:
+    Brain Freeze
+    Thought Scour
+    Gau, Feral Youth
+    Sunfall
+--> Bloodtithe Harvester
+    Emry, Lurker of the Loch
+    Lush Portico
+
+Picked: Bloodtithe Harvester
+
+Pack 3 pick 3:
+    Elvish Mystic
+    Creeping Tar Pit
+--> Chain of Smog
+    Sunbaked Canyon
+    Goblin Engineer
+    Zuran Orb
+
+Picked: Chain of Smog
+
+Pack 3 pick 3:
+    Night's Whisper
+    Superior Spider-Man
+--> Witherbloom Apprentice
+    Thassa's Oracle
+    Phyrexian Dragon Engine
+
+Picked: Witherbloom Apprentice
+
+Pack 3 pick 3:
+--> Mind Twist
+    Wan Shi Tong, Librarian
+    Thespian's Stage
+    Indatha Triome
+
+Picked: Mind Twist
+
+Pack 3 pick 3:
+    Coveted Jewel
+--> Damnation
+    Shifting Woodland
+
+Picked: Damnation
+
+Pack 3 pick 3:
+--> Unholy Heat
+    Twilight Diviner
+
+Picked: Unholy Heat
+
+Pack 3 pick 3:
+--> Arwen, Mortal Queen
+
+Picked: Arwen, Mortal Queen
+

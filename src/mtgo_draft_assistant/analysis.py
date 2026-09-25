@@ -2,8 +2,9 @@
 Draft analysis: wheel diffs and in-flight packs (DESIGN.md §3.1, §3.2).
 
 Nothing here is hardcoded to an 8-player pod or 15-card packs. Pod size comes
-from the ``Players:`` block; pack size is derived from the card count of the
-first block seen in each pack.
+from the ``Players:`` block, or is inferred from the wheels when there is no
+player list (Arena); pack size is derived from the card count of the first
+block seen in each pack.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ class InFlight:
 @dataclass
 class Analysis:
     pod_size: int
+    pod_size_source: str        # "players" | "inferred" | "assumed" | "unknown"
     pack_sizes: dict[int, int]
     current_pack: int | None
     current_pick: int | None
@@ -53,9 +55,53 @@ class Analysis:
 # --------------------------------------------------------------------------
 
 
+def infer_pod_size(draft: Draft, lo: int = 2, hi: int = 12) -> int | None:
+    """
+    Work out the pod size from the packs alone: the N for which every pack
+    seen at pick p comes back at p + N as a subset of what was passed, with
+    exactly N - 1 cards missing. Needs at least one completed lap; None until
+    then. Verified against every MTGO log in the corpus (always 8).
+    """
+    by = {(p.pack, p.pick): p for p in draft.picks}
+    best: int | None = None
+    for n in range(lo, hi + 1):
+        pairs = 0
+        for (pack, pick), origin in by.items():
+            if not origin.complete or origin.picked is None:
+                continue
+            ret = by.get((pack, pick + n))
+            if ret is None:
+                continue
+            passed = set(origin.passed)
+            if not set(ret.available) <= passed or len(passed - set(ret.available)) != n - 1:
+                pairs = -1
+                break
+            pairs += 1
+        if pairs > 0:
+            if best is not None:
+                return None          # ambiguous: two pod sizes both fit
+            best = n
+    return best
+
+
+def pod_size_with_source(draft: Draft) -> tuple[int, str]:
+    """
+    Number of drafters and where it came from. From the Players block when
+    there is one (MTGO); otherwise inferred from the wheels, else the log's
+    hint (Arena human drafts are 8). 0 / "unknown" if nothing is known.
+    """
+    if draft.players:
+        return len(draft.players), "players"
+    inferred = infer_pod_size(draft)
+    if inferred is not None:
+        return inferred, "inferred"
+    if draft.pod_size_hint:
+        return draft.pod_size_hint, "assumed"
+    return 0, "unknown"
+
+
 def pod_size(draft: Draft) -> int:
-    """Number of drafters, from the Players block. 0 if the header is missing."""
-    return len(draft.players)
+    return pod_size_with_source(draft)[0]
 
 
 def pack_sizes(draft: Draft) -> dict[int, int]:
@@ -112,7 +158,7 @@ def wheel_diffs(draft: Draft, n: int | None = None) -> tuple[list[WheelDiff], li
     n = pod_size(draft) if n is None else n
     warnings: list[str] = []
     if n <= 0:
-        return [], ["pod size unknown: no Players block parsed"]
+        return [], ["pod size unknown: no Players block parsed and no lap completed yet"]
 
     by = _by_position(draft)
     out: list[WheelDiff] = []
@@ -198,11 +244,12 @@ def in_flight(draft: Draft, n: int | None = None) -> list[InFlight]:
 
 
 def analyse(draft: Draft) -> Analysis:
-    n = pod_size(draft)
+    n, source = pod_size_with_source(draft)
     wheels, warnings = wheel_diffs(draft, n)
     cur_pack, cur_pick = current_position(draft)
     return Analysis(
         pod_size=n,
+        pod_size_source=source,
         pack_sizes=pack_sizes(draft),
         current_pack=cur_pack,
         current_pick=cur_pick,
