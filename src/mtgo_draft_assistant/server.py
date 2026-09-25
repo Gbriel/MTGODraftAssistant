@@ -337,7 +337,6 @@ class DraftServer:
         self.ratings = ratings
         self.cube = cube                        # explicit list; else 17Lands's in Arena mode
         self._cube_from_ratings: CubeList | None = None
-        self._cube_requested = False
         self.config_path = config_path          # None -> default config.toml location
         if resolver is not None:
             resolver.on_change = self._on_cards_changed
@@ -407,7 +406,6 @@ class DraftServer:
                 cl = from_names(list(ds.cards), f"17Lands {ds.expansion}")
                 cl.fetched_at = ds.fetched_at
                 self._cube_from_ratings = cl
-                self._cube_requested = False
             return self._cube_from_ratings
         return None
 
@@ -420,12 +418,7 @@ class DraftServer:
         errors: list[str] = []
         if self.resolver is not None:
             self.resolver.request(names)
-            if cube is not None and not self._cube_requested:
-                # after the draft's own cards: colours and images for the unseen list
-                self.resolver.request(cube.cards)
-                self._cube_requested = True
-            wanted = names + ([c.name for c in pool.cards if c.state == "unseen"] if cube else [])
-            cards = self.resolver.lookup(wanted)
+            cards = self.resolver.lookup(names)
             pending = self.resolver.pending
             errors = self.resolver.errors[-5:]
         ratings: dict[str, CardRating] = {}

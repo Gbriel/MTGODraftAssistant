@@ -11,8 +11,8 @@ shows, in a browser tab:
   and how many cards it will have.
 - **A colour tally** of what the pod has taken, with the share of each colour
   that wheeled.
-- **A pool tracker**: every card's fate from your seat, with a search box for
-  "is Sol Ring still live?" (see below).
+- **Find a card**: a search box that says whether a card has been seen or
+  picked yet (see below).
 - **Your picks**, in a collapsible drawer.
 - **17Lands numbers** on every card the Arena cube shares with yours (see
   below).
@@ -53,14 +53,15 @@ lazily as cards appear and cached forever in `data/cache/`. The first draft with
 a new cube takes a minute or so to fill in; after that it's instant. Run with
 `--no-cards` for a text-only offline mode.
 
-## Pool tracker
+## Find a card
 
-The Pool pane sorts every card into one of five states: **on screen**, **in
-flight** (you passed it and its pack is due back), **unseen**, **gone** (the pod
-took it, or its pack will not come round again), and **mine**. Filters toggle
-the states; the search box finds a card whatever its state.
+Type a card name into the **Find a card** box to see whether it has been seen
+this draft and what happened to it: you picked it, it is on screen, you passed
+it and it is due back at a given pick, or the pod took it. The line next to the
+box counts cards seen so far.
 
-"Unseen" needs a cube list. Put one in `config.toml`:
+Searching for cards you have *not* seen needs a cube list. Put one in
+`config.toml`:
 
 ```toml
 [cube]
@@ -68,10 +69,8 @@ list = "https://www.mtgo.com/vintage-cube-cardlist"   # or a text file, one card
 ```
 
 or pass `--cube PATH_OR_URL`. A URL is fetched once and cached for a week. In
-`--arena` mode the 17Lands card list is used automatically. If many cards you
-see are not in the list, the pane says so, because "unseen" then means
-nothing. Without a list the pane still tracks seen, in-flight and gone cards
-and says plainly that the rest cannot be enumerated.
+`--arena` mode the 17Lands card list is used automatically. Without a list,
+only cards that have already appeared can be found.
 
 ## MTG Arena
 

@@ -503,39 +503,27 @@
     }
   }
 
-  // ----------------------------------------------------------------- pool
-  // Every card's fate from your seat. Filters toggle states; the search box
-  // finds a card in any state ("is Sol Ring still live?").
-  const POOL_STATES = [
-    ["on_screen", "on screen", "screen"],
-    ["in_flight", "in flight", "flight"],
-    ["unseen", "unseen", "unseen"],
-    ["gone", "gone", "gone"],
-    ["mine", "mine", "mine"],
-  ];
-  const poolOn = { on_screen: true, in_flight: true, unseen: true, gone: false, mine: false };
-  try {
-    const saved = JSON.parse(localStorage.getItem("poolOn") || "{}");
-    for (const k of Object.keys(poolOn)) if (typeof saved[k] === "boolean") poolOn[k] = saved[k];
-  } catch (e) { /* ignore */ }
-  const GROUP_ORDER = ["W", "U", "B", "R", "G", "M", "C", "L", "X"];
+  // ------------------------------------------------------------ find a card
+  // Type a name: has it been seen, and what happened to it? With a cube
+  // list, cards not yet seen are searchable too.
   let poolQuery = "";
   $("pool-search").addEventListener("input", (ev) => {
     poolQuery = ev.target.value.trim().toLowerCase();
     if (lastState) renderPool(lastState);
   });
 
-  function poolTitle(c) {
-    const at = c.pack ? `last seen ${pos(c.pack, c.pick)}` : "never in front of you";
-    if (c.state === "in_flight") return `${at} · due back at pick ${c.due}`;
-    if (c.state === "gone") {
-      const why = { taken: "the pod took it", no_wheel: "its pack will not come round again",
-        pack_over: "that booster is over", unknown_pod: "pod size unknown" }[c.reason] || "";
-      return `${at} · ${why}`;
+  function poolStatus(c) {
+    switch (c.state) {
+      case "mine": return ["mine", `you picked it ${pos(c.pack, c.pick)}`];
+      case "on_screen": return ["screen", "on screen now"];
+      case "in_flight": return ["flight", `seen ${pos(c.pack, c.pick)} · passed, due back at pick ${c.due}`];
+      case "gone": {
+        const why = { taken: "the pod took it", no_wheel: "its pack will not come round again",
+          pack_over: "that booster is over", unknown_pod: "passed" }[c.reason] || "gone";
+        return ["gone", `seen ${pos(c.pack, c.pick)} · ${why}`];
+      }
+      default: return ["unseen", "not seen yet"];
     }
-    if (c.state === "mine") return `you picked it ${pos(c.pack, c.pick)}`;
-    if (c.state === "on_screen") return "in the pack on screen";
-    return at;
   }
 
   function renderPool(st) {
@@ -543,55 +531,28 @@
     const p = st.pool;
     pane.hidden = !p || !st.picks.length;
     if (pane.hidden) return;
-    const filters = $("pool-filters");
-    clear(filters);
-    for (const [key, label] of POOL_STATES) {
-      const n = p.counts[key] || 0;
-      const b = el("button", "chip-btn " + (poolOn[key] ? "on" : "") + ` s-${key}`, `${label} ${n}`);
-      b.type = "button";
-      b.addEventListener("click", () => {
-        poolOn[key] = !poolOn[key];
-        try { localStorage.setItem("poolOn", JSON.stringify(poolOn)); } catch (e) { /* ignore */ }
-        renderPool(lastState);
-      });
-      filters.appendChild(b);
-    }
-    const cube = $("pool-cube");
-    if (p.cube) {
-      const un = p.cube.unmatched.length;
-      cube.textContent = `cube list: ${p.cube.name} · ${p.cube.size} cards`
-        + (un ? ` · ${un} seen card${un === 1 ? "" : "s"} not in the list` : " · every card seen is in the list");
-      cube.title = un ? "Seen in this draft but not in the list:\n" + p.cube.unmatched.join("\n") : "";
-    } else {
-      cube.textContent = "";
-    }
-    const note = $("pool-note");
-    note.hidden = !p.note;
-    note.textContent = p.note || "";
+    const seen = p.cards.length - (p.counts.unseen || 0);
+    $("pool-summary").textContent = p.cube
+      ? `${seen} seen · ${p.counts.unseen} not seen yet (${p.cube.name} list)`
+      : `${seen} cards seen · no cube list, so unseen cards cannot be searched`;
 
     const box = $("pool");
     clear(box);
     const q = poolQuery;
-    let shown = 0;
-    for (const [key, label, cls] of POOL_STATES) {
-      let cards = p.cards.filter((c) => c.state === key);
-      if (q) cards = cards.filter((c) => c.name.toLowerCase().includes(q));
-      else if (!poolOn[key]) continue;
-      if (!cards.length) continue;
-      if (key === "unseen") {
-        // sort the unknown by colour then name so the eye can scan it
-        cards = cards.slice().sort((a, b) => {
-          const ga = GROUP_ORDER.indexOf(group(a.name)), gb = GROUP_ORDER.indexOf(group(b.name));
-          return ga !== gb ? ga - gb : a.name.localeCompare(b.name);
-        });
-      }
-      box.appendChild(el("div", "group-head", `${label} · ${cards.length}`));
-      const row = el("div", "tilerow");
-      for (const c of cards) row.appendChild(tile(c.name, "sm", cls, poolTitle(c)));
-      box.appendChild(row);
-      shown += cards.length;
+    if (q.length < 2) return;
+    const hits = p.cards.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 25);
+    if (!hits.length) {
+      box.appendChild(el("p", "empty", p.cube ? `“${q}”: not in this draft or the cube list` : `“${q}”: not seen so far`));
+      return;
     }
-    if (!shown) box.appendChild(el("p", "empty", q ? `no card matching “${q}”` : "nothing to show; turn a filter on"));
+    for (const c of hits) {
+      const [cls, text] = poolStatus(c);
+      const row = el("div", "find-row");
+      row.dataset.card = c.name;                      // hover preview
+      row.appendChild(el("span", "find-name", c.name));
+      row.appendChild(el("span", `find-status s-${cls}`, text));
+      box.appendChild(row);
+    }
   }
 
   // remember whether the picks drawer was left open

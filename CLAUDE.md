@@ -102,9 +102,10 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   in_flight / gone (with a reason) / unseen; `cube_list.py` loads a list from
   a text file, a Color|Card HTML table URL (the official MTGO Vintage Cube
   page, cached weekly), or the 17Lands dataset (automatic in `--arena`
-  mode). The pane reports how many seen cards are missing from the list and
-  refuses to pretend "unseen" means anything when the list is wrong.
-  `[cube] list` in `config.toml` or `--cube`.
+  mode). `[cube] list` in `config.toml` or `--cube`. **UI is deliberately
+  minimal** (user decision 2026-09-24): a "Find a card" search box that
+  answers seen / picked / not seen, plus a seen count. No state grids or
+  filters; the user found that version bad. Keep it a lookup.
 - **Next: M5** match logs, after re-verifying the format markers in
   DESIGN.md §2.3 against a current `Match_GameLog_*.dat`.
 
