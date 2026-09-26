@@ -10,12 +10,14 @@
   let ratings = {};            // name -> 17Lands numbers (only names with data)
   let lastCommitted = -1;      // to flash the newest pick
 
-  // whether the 17Lands badge is drawn on tiles, and which player group it uses
+  // whether the 17Lands badge is drawn on tiles, and which dataset it uses
   let showRatings = true;
-  let topPlayers = false;
+  let topPlayers = false;      // 17Lands's top-player group instead of all players
+  let latestEvent = false;     // the current cube run only instead of all time
   try {
     showRatings = localStorage.getItem("showRatings") !== "0";
     topPlayers = localStorage.getItem("topPlayers") === "1";
+    latestEvent = localStorage.getItem("latestEvent") === "1";
   } catch (e) { /* ignore */ }
 
   // ---------------------------------------------------------------- utils
@@ -46,7 +48,7 @@
     const meta = lastMeta || {};
     const need = meta.min_games || 500;
     const out = [];
-    out.push(`17Lands ${meta.expansion || ""}${usingTop() ? " (top players)" : ""}: ALSA ${fmt1(r.alsa)} (seen ${fmtInt(r.seen_count)}×) · ATA ${fmt1(r.ata)}`);
+    out.push(`17Lands ${meta.expansion || ""} (${setLabel()}): ALSA ${fmt1(r.alsa)} (seen ${fmtInt(r.seen_count)}×) · ATA ${fmt1(r.ata)}`);
     if (r.gih_wr !== null && r.gih_wr !== undefined) {
       out.push(`GIH WR ${fmtPct(r.gih_wr)} · ${fmtInt(r.gih_games)} games · IWD ${r.iwd === null ? "n/a" : (r.iwd >= 0 ? "+" : "") + (100 * r.iwd).toFixed(1) + "pp"}`);
       if (r.gp_wr !== null) out.push(`GP WR ${fmtPct(r.gp_wr)} · ${fmtInt(r.games)} games · OH WR ${fmtPct(r.oh_wr)}`);
@@ -221,9 +223,22 @@
   // Dataset status plus the honest number: how many cards seen in this
   // draft have no Arena data at all.
   let lastMeta = null;
-  // the top-players dataset is used only when the toggle is on and it has loaded
-  function usingTop() {
-    return topPlayers && !!(lastMeta && lastMeta.top && lastMeta.top.status === "ok");
+  // Which dataset the toggles ask for, as the server keys it ("PERIOD|group"),
+  // or null for the primary one. An alternate is used only once it has loaded.
+  function wantedKey() {
+    if (!lastMeta) return null;
+    const period = latestEvent ? "LATEST_EVENT" : lastMeta.time_period;
+    const group = topPlayers ? "top" : "";
+    if (period === lastMeta.time_period && !group) return null;
+    const key = `${period}|${group}`;
+    const s = lastMeta.sets && lastMeta.sets[key];
+    return s && s.status === "ok" ? key : null;
+  }
+  function usingTop() { const k = wantedKey(); return !!k && k.endsWith("|top"); }
+  function usingLatest() { const k = wantedKey(); return !!k && k.startsWith("LATEST_EVENT|"); }
+  function setLabel() {
+    const period = usingLatest() ? "latest event" : (lastMeta && lastMeta.time_period === "ALL_TIME" ? "all time" : (lastMeta ? lastMeta.time_period : ""));
+    return `${period} · ${usingTop() ? "top players" : "all players"}`;
   }
   function renderRatingsBar(st) {
     const bar = $("ratings-bar");
@@ -232,14 +247,15 @@
     clear(bar);
     bar.hidden = !meta;
     if (!meta) return;
-    const shown = usingTop() ? meta.top : meta;
+    const key = wantedKey();
+    const shown = key ? meta.sets[key] : meta;
     bar.className = "ratings " + meta.status;
     bar.appendChild(el("span", "lbl", "17Lands"));
     bar.appendChild(el("span", "ds", `${meta.expansion} · ${meta.format}`));
     if (meta.status === "ok") {
       const when = shown.age_hours === null ? "" : (shown.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(shown.age_hours)}h ago`);
       bar.appendChild(el("span", "muted",
-        `${meta.time_period === "ALL_TIME" ? "all time" : meta.time_period} · ${usingTop() ? "top players" : "all players"} · ${fmtInt(shown.cards)} cards · ${fmtInt(shown.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
+        `${setLabel()} · ${fmtInt(shown.cards)} cards · ${fmtInt(shown.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
       const seen = Object.keys(st.ratings || {}).length + (st.ratings_unmatched || []).length;
       if (seen) {
         const miss = st.ratings_unmatched || [];
@@ -272,30 +288,58 @@
       + "then ALSA (average pick at which the pod last saw it; lower = taken earlier).\n"
       + "Gold = top of the cube by GIH WR, green = next tier. Hover a card for the rest.";
     bar.appendChild(lab);
-    // all players vs 17Lands's top-player group, as on the site's dropdown
-    const topLab = el("label", "opt");
-    const topCb = el("input");
-    topCb.type = "checkbox";
-    topCb.checked = topPlayers;
-    const topReady = !!(meta.top && meta.top.status === "ok");
-    topCb.disabled = !topReady;
-    topCb.addEventListener("change", () => {
-      topPlayers = topCb.checked;
-      try { localStorage.setItem("topPlayers", topPlayers ? "1" : "0"); } catch (e) { /* ignore */ }
-      render(lastState);
-    });
-    topLab.appendChild(topCb);
-    topLab.appendChild(document.createTextNode("top players"));
-    topLab.title = topReady
-      ? "Use the win rates from 17Lands's top-player group only (the site's 'Top' user group)."
-      : (meta.top ? `top-player data: ${meta.top.status}${meta.top.error ? " · " + meta.top.error : ""}` : "top-player data not enabled");
-    bar.appendChild(topLab);
-    const key = el("span", "key");
-    key.appendChild(el("i", "rate r-hot", "60%"));
-    key.appendChild(document.createTextNode(" top tier "));
-    key.appendChild(el("i", "rate r-low", "52%"));
-    key.appendChild(document.createTextNode(" bottom · then ALSA"));
-    bar.appendChild(key);
+    // the dataset toggles: all players vs 17Lands's top-player group, all time vs
+    // the current cube run. Each is enabled once the matching pull has loaded.
+    const sets = meta.sets || {};
+    const ready = (period, group) => {
+      const k = `${period}|${group}`;
+      if (period === meta.time_period && !group) return true;
+      return !!(sets[k] && sets[k].status === "ok");
+    };
+    // short state for a toggle whose data is not ready, shown inline so nobody
+    // waits on a greyed box without knowing why
+    const why = (period, group) => {
+      const s = sets[`${period}|${group}`];
+      if (!s) return ["not enabled", ""];
+      if (s.fetching || s.status === "fetching") return ["loading…", ""];
+      if (s.status === "error") return [`failed, retry in ${s.retry_in === null ? "?" : s.retry_in + "s"}`, s.error || ""];
+      return [s.status, s.error || ""];
+    };
+    const mkToggle = (label, getter, setter, storeKey, enabled, tip, state) => {
+      const wrap = el("label", "opt" + (enabled ? "" : " off"));
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.checked = getter();
+      cb.disabled = !enabled;
+      cb.addEventListener("change", () => {
+        setter(cb.checked);
+        try { localStorage.setItem(storeKey, cb.checked ? "1" : "0"); } catch (e) { /* ignore */ }
+        render(lastState);
+      });
+      wrap.appendChild(cb);
+      wrap.appendChild(document.createTextNode(label));
+      if (state) wrap.appendChild(el("small", "state", state));
+      wrap.title = tip;
+      return wrap;
+    };
+    const periodNow = latestEvent ? "LATEST_EVENT" : meta.time_period;
+    const groupNow = topPlayers ? "top" : "";
+    const topOk = ready(periodNow, "top");
+    const [topState, topErr] = topOk ? ["", ""] : why(periodNow, "top");
+    bar.appendChild(mkToggle("top players", () => topPlayers, (v) => { topPlayers = v; }, "topPlayers", topOk,
+      topOk ? "Win rates from 17Lands's top-player group only (the site's 'Top' user group)."
+            : `top-player data: ${topState}${topErr ? "\n" + topErr : ""}`, topState));
+    const latestOk = ready("LATEST_EVENT", groupNow);
+    const [lateState, lateErr] = latestOk ? ["", ""] : why("LATEST_EVENT", groupNow);
+    bar.appendChild(mkToggle("latest event only", () => latestEvent, (v) => { latestEvent = v; }, "latestEvent", latestOk,
+      latestOk ? "Only the current cube run, instead of every run 17Lands has recorded."
+               : `latest-event data: ${lateState}${lateErr ? "\n" + lateErr : ""}`, lateState));
+    const legend = el("span", "key");
+    legend.appendChild(el("i", "rate r-hot", "60%"));
+    legend.appendChild(document.createTextNode(" top tier "));
+    legend.appendChild(el("i", "rate r-low", "52%"));
+    legend.appendChild(document.createTextNode(" bottom · then ALSA"));
+    bar.appendChild(legend);
   }
 
   // -------------------------------------------------------------- header
@@ -602,7 +646,8 @@
     lastState = st;
     cards = st.cards || {};
     lastMeta = st.ratings_meta;
-    ratings = (usingTop() ? st.ratings_top : st.ratings) || {};
+    const key = wantedKey();
+    ratings = (key ? (st.ratings_sets || {})[key] : st.ratings) || {};
     renderRatingsBar(st);
     renderHeader(st);
     renderTaken(st);

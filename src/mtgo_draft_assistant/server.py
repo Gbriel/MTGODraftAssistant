@@ -63,7 +63,7 @@ def build_state(update: Update | None, analysis: Analysis | None,
                 ratings_meta: dict | None = None,
                 ratings_unmatched: list[str] | None = None,
                 pool: PoolReport | None = None,
-                ratings_top: dict[str, CardRating] | None = None) -> dict:
+                ratings_sets: dict[str, dict[str, CardRating]] | None = None) -> dict:
     """JSON-serialisable view of everything the UI needs."""
     min_games = (ratings_meta or {}).get("min_games", 0)
     base = {
@@ -85,8 +85,10 @@ def build_state(update: Update | None, analysis: Analysis | None,
         # 17Lands: per-card numbers for names in this draft, dataset status,
         # and the names that have no Arena data (real information, not noise)
         "ratings": {name: r.to_json(min_games) for name, r in (ratings or {}).items()},
-        # the same cards from 17Lands's top-player group; the page toggles between the two
-        "ratings_top": {name: r.to_json(min_games) for name, r in (ratings_top or {}).items()},
+        # the same cards in the other period / player-group combinations, keyed
+        # "PERIOD|group" (e.g. "LATEST_EVENT|top"); the page's toggles pick one
+        "ratings_sets": {key: {name: r.to_json(min_games) for name, r in cards.items()}
+                         for key, cards in (ratings_sets or {}).items()},
         "ratings_meta": ratings_meta,           # None when ratings are disabled
         "ratings_unmatched": list(ratings_unmatched or []),
         "pool": pool.to_json() if pool is not None else None,
@@ -336,15 +338,16 @@ class DraftServer:
                  watcher: DraftWatcher | ArenaWatcher | AutoWatcher | None = None,
                  cube: CubeList | None = None,
                  arena_cube: RatingsProvider | None = None,
-                 ratings_top: RatingsProvider | None = None) -> None:
+                 ratings_sets: dict[str, RatingsProvider] | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.verbose = verbose
         self.resolver = resolver
         self.ratings = ratings
-        self.ratings_top = ratings_top          # same expansion, user_group="top"
-        if ratings_top is not None:
-            ratings_top.on_change = self._on_cards_changed
+        # alternates for the page's toggles: {"PERIOD|group": provider}
+        self.ratings_sets: dict[str, RatingsProvider] = dict(ratings_sets or {})
+        for provider in self.ratings_sets.values():
+            provider.on_change = self._on_cards_changed
         self.cube = cube                        # explicit list; else 17Lands's for Arena drafts
         # the current cube's card list for Arena drafts: a LATEST_EVENT pull, since the
         # ALL_TIME ratings include cards from earlier runs; falls back to ``ratings``
@@ -397,7 +400,7 @@ class DraftServer:
         if self.ratings is None:
             return None
         meta = self.ratings.status()
-        meta["top"] = self.ratings_top.status() if self.ratings_top is not None else None
+        meta["sets"] = {key: p.status() for key, p in self.ratings_sets.items()}
         return meta
 
     def _idle_state(self, version: int) -> dict:
@@ -418,11 +421,10 @@ class DraftServer:
 
     def _arena_name(self, grp_id: int) -> str | None:
         """Arena card id -> name: 17Lands first (no network), then Scryfall (cached, async)."""
-        for provider in (self.arena_cube, self.ratings):
-            if provider is not None:
-                name = provider.arena_name(grp_id)
-                if name:
-                    return name
+        for provider in self._providers():
+            name = provider.arena_name(grp_id)
+            if name:
+                return name
         if self.resolver is not None:
             return self.resolver.arena_name(grp_id)
         return None
@@ -431,13 +433,13 @@ class DraftServer:
         """The explicit cube list, or for an Arena draft the 17Lands card list."""
         if self.cube is not None:
             return self.cube
-        provider = self.arena_cube or self.ratings
+        provider = self.arena_cube or self.ratings_sets.get("LATEST_EVENT|") or self.ratings
         if source == "arena" and provider is not None:
             ds = provider.dataset
             if ds is not None and (self._cube_from_ratings is None
                                    or len(self._cube_from_ratings) != len(ds)
                                    or self._cube_from_ratings.fetched_at != ds.fetched_at):
-                label = f"17Lands {ds.expansion}" + (" current run" if self.arena_cube else "")
+                label = f"17Lands {ds.expansion}" + (" current run" if provider is not self.ratings else "")
                 cl = from_names(list(ds.cards), label)
                 cl.fetched_at = ds.fetched_at
                 self._cube_from_ratings = cl
@@ -457,19 +459,17 @@ class DraftServer:
             pending = self.resolver.pending
             errors = self.resolver.errors[-5:]
         ratings: dict[str, CardRating] = {}
-        ratings_top: dict[str, CardRating] = {}
         unmatched: list[str] = []
         if self.ratings is not None:
             ratings, unmatched = self.ratings.lookup(names)
-        if self.ratings_top is not None:
-            ratings_top, _ = self.ratings_top.lookup(names)
+        sets = {key: p.lookup(names)[0] for key, p in self.ratings_sets.items()}
         source = self._active_source(update)
         log_dir = update.path.parent if source == "arena" else self.log_dir
         self.store.set(self._decorate(build_state(
             update, analysis, log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=self._ratings_meta(), ratings_unmatched=unmatched,
-            pool=pool, ratings_top=ratings_top,
+            pool=pool, ratings_sets=sets,
         ), source))
 
     def _publish_idle(self) -> None:
@@ -560,9 +560,8 @@ class DraftServer:
     def start(self) -> None:
         if self.resolver is not None:
             self.resolver.start()
-        for provider in (self.ratings, self.ratings_top, self.arena_cube):
-            if provider is not None:
-                provider.start()
+        for provider in self._providers():
+            provider.start()
         # Prime synchronously so the first page load has data.
         first = self.watcher.poll()
         if first is not None:
@@ -591,9 +590,16 @@ class DraftServer:
             t.join(timeout=2)
         if self.resolver is not None:
             self.resolver.stop()
-        for provider in (self.ratings, self.ratings_top, self.arena_cube):
-            if provider is not None:
-                provider.stop()
+        for provider in self._providers():
+            provider.stop()
+
+    def _providers(self) -> list[RatingsProvider]:
+        """Every distinct ratings provider (the cube-list one may be shared)."""
+        out: list[RatingsProvider] = []
+        for p in [self.ratings, *self.ratings_sets.values(), self.arena_cube]:
+            if p is not None and all(p is not q for q in out):
+                out.append(p)
+        return out
 
     def wait(self) -> None:
         """Block the main thread until interrupted."""

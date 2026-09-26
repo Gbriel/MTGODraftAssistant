@@ -32,6 +32,7 @@ from .ratings import (
     DEFAULT_MIN_GAMES,
     DEFAULT_REFRESH_HOURS,
     DEFAULT_TIME_PERIOD,
+    RatingsClient,
     RatingsProvider,
 )
 from .scryfall import CardResolver
@@ -96,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config()
     rcfg = ratings_settings(cfg)
     ratings = None
-    ratings_top = None
+    ratings_sets = {}
     arena_cube = None
     if not args.no_ratings and rcfg.get("enabled", True):
         expansion = args.ratings_expansion or str(rcfg.get("expansion") or DEFAULT_EXPANSION)
@@ -104,17 +105,21 @@ def main(argv: list[str] | None = None) -> int:
         refresh = float(rcfg.get("refresh_hours", DEFAULT_REFRESH_HOURS))
         min_games = int(rcfg.get("min_games", DEFAULT_MIN_GAMES))
         period = str(rcfg.get("time_period") or DEFAULT_TIME_PERIOD)
-        ratings = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
-                                  refresh_hours=refresh, min_games=min_games, time_period=period)
-        # the same numbers restricted to 17Lands's top-player group, for the page's toggle
-        ratings_top = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
-                                      refresh_hours=refresh, min_games=min_games, time_period=period,
-                                      user_group="top")
-        if not args.mtgo and period != "LATEST_EVENT":
-            # the current run's card list defines the Arena cube for "not seen yet"
-            arena_cube = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
-                                         refresh_hours=refresh, min_games=min_games,
-                                         time_period="LATEST_EVENT")
+
+        client = RatingsClient()        # shared: the pulls go out one at a time
+
+        def provider(time_period: str, user_group: str = "") -> RatingsProvider:
+            return RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt, client=client,
+                                   refresh_hours=refresh, min_games=min_games,
+                                   time_period=time_period, user_group=user_group)
+
+        ratings = provider(period)
+        # the page's toggles: all time vs the latest event, all players vs top players
+        periods = [period] + (["LATEST_EVENT"] if period != "LATEST_EVENT" else [])
+        ratings_sets = {f"{tp}|{ug}": provider(tp, ug)
+                        for tp in periods for ug in ("", "top") if (tp, ug) != (period, "")}
+        # the latest event's card list doubles as the Arena cube for "not seen yet"
+        arena_cube = ratings_sets.get("LATEST_EVENT|")
 
     cube = None
     cube_spec = args.cube or cube_settings(cfg).get("list")
@@ -126,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
 
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
-                         resolver=resolver, ratings=ratings, ratings_top=ratings_top,
+                         resolver=resolver, ratings=ratings, ratings_sets=ratings_sets,
                          watcher=watcher, cube=cube, arena_cube=arena_cube)
     server.start()
     if cube is not None:
@@ -146,8 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         st = ratings.status()
         have = f"{st['cards']} cards cached from {st['fetched_at']}" if st["cards"] else "no cache yet"
         print(f"17Lands ratings: {ratings.expansion} / {ratings.format} / {ratings.time_period} "
-              f"({have}; refreshed every {ratings.refresh_hours:g}h; all players and top players)",
-              flush=True)
+              f"({have}; refreshed every {ratings.refresh_hours:g}h; "
+              f"{len(ratings_sets)} alternate sets for the period / player-group toggles)", flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)

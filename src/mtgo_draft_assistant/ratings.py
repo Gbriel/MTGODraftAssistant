@@ -46,7 +46,7 @@ DEFAULT_TIME_PERIOD = "ALL_TIME"        # every run of the cube; LATEST_EVENT et
 DEFAULT_USER_GROUP = ""                 # all players; "top" | "middle" | "bottom" as on the site
 DEFAULT_REFRESH_HOURS = 24.0
 DEFAULT_MIN_GAMES = 500                 # hide a win rate below this many GIH games
-RETRY_AFTER_FAILURE = 600.0             # seconds before another attempt after an error
+RETRY_AFTER_FAILURE = 60.0              # seconds before another attempt after an error
 
 
 # -- names -------------------------------------------------------------------
@@ -243,8 +243,10 @@ class Dataset:
 class RatingsClient:
     RETRY_STATUSES = {429, 500, 502, 503, 504}
 
-    def __init__(self, min_interval: float = 1.0, timeout: float = 30.0,
+    def __init__(self, min_interval: float = 1.0, timeout: float = 120.0,
                  max_retries: int = 3) -> None:
+        # One instance can be shared by several providers: requests then go out
+        # one at a time with ``min_interval`` between them.
         self.min_interval = min_interval
         self.timeout = timeout
         self.max_retries = max_retries
@@ -449,6 +451,10 @@ class RatingsProvider:
         with self._lock:
             fetching = self._fetching
             error = self.error
+            last = self._last_attempt
+        retry_in = None
+        if error and not fetching and last is not None:
+            retry_in = max(0, round(RETRY_AFTER_FAILURE - (time.monotonic() - last)))
         if ds is not None:
             state = "ok"
         elif fetching:
@@ -472,6 +478,7 @@ class RatingsProvider:
             "with_win_rate": ds.with_win_rate if ds else 0,
             "min_games": self.min_games,
             "error": error,
+            "retry_in": retry_in,          # seconds until the next attempt after a failure
         }
 
     # -- worker

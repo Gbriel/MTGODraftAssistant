@@ -223,29 +223,38 @@ def test_ratings_in_state_with_unmatched_count(tmp_path):
         s.stop()
 
 
-def test_top_players_dataset_is_served_alongside(tmp_path):
+def test_alternate_ratings_sets_are_served_alongside(tmp_path):
     from mtgo_draft_assistant.ratings import RatingsProvider
     from test_ratings import FakeClient as FakeRatingsClient, row
 
     _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
-    all_rows = [row("Mana Vault", alsa=2.2, gih_wr=0.58, gih_games=9000)]
-    top_rows = [row("Mana Vault", alsa=2.0, gih_wr=0.63, gih_games=1500)]
-    ratings = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=all_rows))
-    top = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=top_rows), user_group="top")
-    s = DraftServer(tmp_path, port=0, interval=0.05, ratings=ratings, ratings_top=top)
+    cache = tmp_path / "cache"
+    mk = lambda wr, games, **kw: RatingsProvider(  # noqa: E731
+        cache, client=FakeRatingsClient(rows=[row("Mana Vault", alsa=2.2, gih_wr=wr, gih_games=games)]), **kw)
+    ratings = mk(0.58, 9000)
+    sets = {
+        "ALL_TIME|top": mk(0.63, 1500, user_group="top"),
+        "LATEST_EVENT|": mk(0.60, 4000, time_period="LATEST_EVENT"),
+        "LATEST_EVENT|top": mk(0.65, 700, time_period="LATEST_EVENT", user_group="top"),
+    }
+    s = DraftServer(tmp_path, port=0, interval=0.05, ratings=ratings, ratings_sets=sets)
     s.start()
     try:
         deadline = time.time() + 5
         while time.time() < deadline:
             st = json.loads(_get(s.url + "api/state")[2])
             m = st["ratings_meta"]
-            if m and m["status"] == "ok" and m["top"] and m["top"]["status"] == "ok" and st["ratings_top"]:
+            if (m and m["status"] == "ok" and all(x["status"] == "ok" for x in m["sets"].values())
+                    and len(st["ratings_sets"]) == 3 and all(st["ratings_sets"].values())):
                 break
             time.sleep(0.05)
         assert st["ratings"]["Mana Vault"]["gih_wr"] == 0.58
-        assert st["ratings_top"]["Mana Vault"]["gih_wr"] == 0.63
-        assert st["ratings_meta"]["top"]["user_group"] == "top"
-        assert st["ratings_meta"]["user_group"] == ""
+        assert st["ratings_sets"]["ALL_TIME|top"]["Mana Vault"]["gih_wr"] == 0.63
+        assert st["ratings_sets"]["LATEST_EVENT|"]["Mana Vault"]["gih_wr"] == 0.60
+        assert st["ratings_sets"]["LATEST_EVENT|top"]["Mana Vault"]["gih_games"] == 700
+        assert m["sets"]["LATEST_EVENT|top"] == {**m["sets"]["LATEST_EVENT|top"], "user_group": "top",
+                                                  "time_period": "LATEST_EVENT"}
+        assert m["user_group"] == "" and m["time_period"] == "ALL_TIME"
     finally:
         s.stop()
 

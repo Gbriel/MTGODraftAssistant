@@ -107,9 +107,11 @@ The line under the header says how many cards the dataset has, how many have a
 win rate, and how many cards you have seen this draft have no Arena data at all
 (hover it for the list). Untick **badges** to hide them.
 
-Tick **top players** on the 17Lands line to switch every number to 17Lands's
-top-player group, the same as the site's "Top" user filter; untick it for all
-players. Both are downloaded, so the switch is instant.
+Two toggles on the 17Lands line pick the dataset. **top players** switches
+every number to 17Lands's top-player group, the same as the site's "Top" user
+filter. **latest event only** uses just the current cube run instead of every
+run 17Lands has recorded, so a card's number reflects the cube as it is now.
+All four combinations are downloaded once a day, so switching is instant.
 
 Run with `--no-ratings` to skip this, or set `enabled = false` under
 `[ratings]` in `config.toml`; the same table can pick another expansion

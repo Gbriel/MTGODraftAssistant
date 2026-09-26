@@ -123,6 +123,8 @@ body {
 .ratings.fetching .ds { color: var(--muted); }
 .ratings .opt { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--muted); font-family: var(--font); cursor: pointer; }
 .ratings .opt input { margin: 0; accent-color: var(--accent); }
+.ratings .opt.off { opacity: .7; cursor: help; }
+.ratings .opt .state { font-family: var(--mono); font-size: 10px; color: #f0c890; margin-left: 4px; }
 .ratings .key { color: var(--muted); font-family: var(--font); display: inline-flex; align-items: center; gap: 2px; }
 .ratings .key .rate { position: static; font-style: normal; }
 
