@@ -72,6 +72,12 @@ def test_idle_state_shape(tmp_path):
     assert st["draft"] is None
 
 
+def test_state_carries_a_ui_version(server):
+    from mtgo_draft_assistant.server import ui_version
+    st = json.loads(_get(server.url + "api/state")[2])
+    assert st["ui_version"] == ui_version() and "-" in st["ui_version"]
+
+
 def test_index_and_static(server):
     status, headers, body = _get(server.url)
     assert status == 200

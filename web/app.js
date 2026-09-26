@@ -640,9 +640,20 @@
     try { localStorage.setItem("picksOpen", picksPane.open ? "1" : "0"); } catch (e) { /* ignore */ }
   });
 
+  // The server fingerprints its page files. If it changes (the program was
+  // restarted after an update) this tab is running old code: reload it.
+  let uiVersion = null;
+  function checkUiVersion(st) {
+    if (!st.ui_version) return false;
+    if (uiVersion === null) { uiVersion = st.ui_version; return false; }
+    if (st.ui_version !== uiVersion) { location.reload(); return true; }
+    return false;
+  }
+
   let lastState = null;
   function render(st) {
     if (!st) return;
+    if (checkUiVersion(st)) return;
     lastState = st;
     cards = st.cards || {};
     lastMeta = st.ratings_meta;

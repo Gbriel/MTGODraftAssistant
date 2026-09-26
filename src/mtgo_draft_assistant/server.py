@@ -42,6 +42,21 @@ SSE_KEEPALIVE_SECONDS = 15.0
 CARD_PUSH_DEBOUNCE_SECONDS = 0.3
 
 
+def ui_version() -> str:
+    """
+    Fingerprint of the page files. Sent in every state; the page reloads
+    itself when it changes, so a restarted server never talks to a stale
+    tab that is still running the previous JavaScript.
+    """
+    parts = []
+    for name in ("index.html", "app.js", "style.css"):
+        try:
+            parts.append(str((WEB_DIR / name).stat().st_mtime_ns))
+        except OSError:
+            parts.append("0")
+    return "-".join(parts)
+
+
 def draft_card_names(update: Update) -> list[str]:
     """Every distinct card name that has appeared in this draft, in order."""
     seen: dict[str, None] = {}
@@ -342,6 +357,7 @@ class DraftServer:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.verbose = verbose
+        self._ui_version = ui_version()
         self.resolver = resolver
         self.ratings = ratings
         # alternates for the page's toggles: {"PERIOD|group": provider}
@@ -412,6 +428,7 @@ class DraftServer:
             source = "arena" if self.arena else "auto" if self.auto else "mtgo"
         state["source"] = source
         state["config_locked"] = self.config_locked
+        state["ui_version"] = self._ui_version
         state["arena_log"] = str(self.watcher.arena_log) if self.auto else (
             str(self.watcher.log_path) if self.arena else None)
         return state
