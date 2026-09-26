@@ -96,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config()
     rcfg = ratings_settings(cfg)
     ratings = None
+    ratings_top = None
     arena_cube = None
     if not args.no_ratings and rcfg.get("enabled", True):
         expansion = args.ratings_expansion or str(rcfg.get("expansion") or DEFAULT_EXPANSION)
@@ -105,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
         period = str(rcfg.get("time_period") or DEFAULT_TIME_PERIOD)
         ratings = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
                                   refresh_hours=refresh, min_games=min_games, time_period=period)
+        # the same numbers restricted to 17Lands's top-player group, for the page's toggle
+        ratings_top = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
+                                      refresh_hours=refresh, min_games=min_games, time_period=period,
+                                      user_group="top")
         if not args.mtgo and period != "LATEST_EVENT":
             # the current run's card list defines the Arena cube for "not seen yet"
             arena_cube = RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt,
@@ -121,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
 
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
-                         resolver=resolver, ratings=ratings, watcher=watcher, cube=cube,
-                         arena_cube=arena_cube)
+                         resolver=resolver, ratings=ratings, ratings_top=ratings_top,
+                         watcher=watcher, cube=cube, arena_cube=arena_cube)
     server.start()
     if cube is not None:
         print(f"Cube list: {cube.name} ({len(cube)} cards, {cube.source})", flush=True)
@@ -141,7 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         st = ratings.status()
         have = f"{st['cards']} cards cached from {st['fetched_at']}" if st["cards"] else "no cache yet"
         print(f"17Lands ratings: {ratings.expansion} / {ratings.format} / {ratings.time_period} "
-              f"({have}; refreshed every {ratings.refresh_hours:g}h)", flush=True)
+              f"({have}; refreshed every {ratings.refresh_hours:g}h; all players and top players)",
+              flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)

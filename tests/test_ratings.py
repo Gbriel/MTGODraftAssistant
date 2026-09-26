@@ -51,8 +51,8 @@ class FakeClient:
         self.fail = fail
         self.calls: list[tuple] = []
 
-    def fetch(self, expansion, fmt, time_period="ALL_TIME"):
-        self.calls.append((expansion, fmt, time_period))
+    def fetch(self, expansion, fmt, time_period="ALL_TIME", user_group=""):
+        self.calls.append((expansion, fmt, time_period) + ((user_group,) if user_group else ()))
         if self.fail:
             raise OSError("network down")
         return list(self.rows)
@@ -230,6 +230,23 @@ def test_expansion_and_period_are_part_of_the_cache_key(tmp_path):
     assert p2.status()["status"] == "empty"
     p3 = RatingsProvider(tmp_path, client=FakeClient(), now=lambda: now, time_period="LATEST_EVENT")
     assert p3.status()["status"] == "ok" and p3.status()["time_period"] == "LATEST_EVENT"
+    # a player group is its own dataset too
+    p4 = RatingsProvider(tmp_path, client=FakeClient(), now=lambda: now, time_period="LATEST_EVENT",
+                         user_group="top")
+    assert p4.status()["status"] == "empty" and p4.status()["user_group"] == "top"
+
+
+def test_user_group_is_sent_and_cached_separately(tmp_path):
+    client = FakeClient()
+    p = RatingsProvider(tmp_path, client=client, user_group="top")
+    p.start()
+    try:
+        assert wait_until(lambda: p.status()["status"] == "ok")
+    finally:
+        p.stop()
+    assert client.calls == [("Cube - Powered", "PremierDraft", "ALL_TIME", "top")]
+    assert RatingsProvider(tmp_path, client=FakeClient()).status()["status"] == "empty"
+    assert RatingsProvider(tmp_path, client=FakeClient(), user_group="top").status()["status"] == "ok"
 
 
 def test_client_parses_the_wrapped_response(monkeypatch):
@@ -253,3 +270,6 @@ def test_client_parses_the_wrapped_response(monkeypatch):
     assert seen[0].startswith("https://www.17lands.com/api/card_data?")
     assert "event_type=PremierDraft" in seen[0] and "time_period=ALL_TIME" in seen[0]
     assert "expansion=Cube+-+Powered" in seen[0] or "expansion=Cube%20-%20Powered" in seen[0]
+    assert "user_group" not in seen[0]
+    RatingsClient(min_interval=0).fetch("Cube - Powered", "PremierDraft", "ALL_TIME", "top")
+    assert "user_group=top" in seen[1]

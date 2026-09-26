@@ -200,6 +200,10 @@ def test_load_url_caches_and_survives_a_failed_refresh(tmp_path):
     cl = load_url("https://example.test/vintage-cube-cardlist", tmp_path, fetcher=fetch_ok, now=lambda: now)
     assert cl.source == "url" and cl.name == "vintage cube cardlist" and len(cl) == 6
     assert len(calls) == 1
+    # the cache's age is its mtime; pin it so the test does not depend on the real clock
+    import os
+    cached = next((tmp_path / "cubes").glob("*.txt"))
+    os.utime(cached, (now.timestamp(), now.timestamp()))
     # fresh cache: no fetch
     cl2 = load_url("https://example.test/vintage-cube-cardlist", tmp_path, fetcher=fetch_ok, now=lambda: now)
     assert len(calls) == 1 and cl2.cards == cl.cards

@@ -43,6 +43,7 @@ RATINGS_URL = "https://www.17lands.com/api/card_data"
 DEFAULT_EXPANSION = "Cube - Powered"    # the powered/Vintage cube; plain "Cube" is unpowered
 DEFAULT_FORMAT = "PremierDraft"         # sent as event_type
 DEFAULT_TIME_PERIOD = "ALL_TIME"        # every run of the cube; LATEST_EVENT etc. also exist
+DEFAULT_USER_GROUP = ""                 # all players; "top" | "middle" | "bottom" as on the site
 DEFAULT_REFRESH_HOURS = 24.0
 DEFAULT_MIN_GAMES = 500                 # hide a win rate below this many GIH games
 RETRY_AFTER_FAILURE = 600.0             # seconds before another attempt after an error
@@ -250,10 +251,12 @@ class RatingsClient:
         self._last = 0.0
         self._lock = threading.Lock()
 
-    def fetch(self, expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD) -> list[dict]:
-        url = RATINGS_URL + "?" + urllib.parse.urlencode({
-            "expansion": expansion, "event_type": fmt, "time_period": time_period,
-        })
+    def fetch(self, expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD,
+              user_group: str = DEFAULT_USER_GROUP) -> list[dict]:
+        params = {"expansion": expansion, "event_type": fmt, "time_period": time_period}
+        if user_group:
+            params["user_group"] = user_group
+        url = RATINGS_URL + "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT,
                                                    "Accept": "application/json"})
         backoff = 2.0
@@ -300,27 +303,29 @@ class RatingsCache:
         self._db.commit()
 
     @staticmethod
-    def key(expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD) -> str:
+    def key(expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD,
+            user_group: str = DEFAULT_USER_GROUP) -> str:
         # v2: the endpoint changed on 2026-09-25; old cached pulls must not be reused
-        return f"v2|{expansion}|{fmt}|{time_period}"
+        return f"v2|{expansion}|{fmt}|{time_period}|{user_group or 'all'}"
 
-    def get(self, expansion: str, fmt: str,
-            time_period: str = DEFAULT_TIME_PERIOD) -> tuple[list[dict], str] | None:
+    def get(self, expansion: str, fmt: str, time_period: str = DEFAULT_TIME_PERIOD,
+            user_group: str = DEFAULT_USER_GROUP) -> tuple[list[dict], str] | None:
         with self._lock:
             row = self._db.execute(
                 "SELECT body, fetched_at FROM datasets WHERE key=?",
-                (self.key(expansion, fmt, time_period),),
+                (self.key(expansion, fmt, time_period, user_group),),
             ).fetchone()
         if row is None:
             return None
         return json.loads(row[0]), row[1]
 
     def put(self, expansion: str, fmt: str, rows: list[dict], fetched_at: str,
-            time_period: str = DEFAULT_TIME_PERIOD) -> None:
+            time_period: str = DEFAULT_TIME_PERIOD, user_group: str = DEFAULT_USER_GROUP) -> None:
         with self._lock:
             self._db.execute(
                 "INSERT OR REPLACE INTO datasets VALUES (?,?,?,?,?)",
-                (self.key(expansion, fmt, time_period), expansion, fmt, fetched_at, json.dumps(rows)),
+                (self.key(expansion, fmt, time_period, user_group), expansion, fmt, fetched_at,
+                 json.dumps(rows)),
             )
             self._db.commit()
 
@@ -347,11 +352,13 @@ class RatingsProvider:
                  refresh_hours: float = DEFAULT_REFRESH_HOURS,
                  min_games: int = DEFAULT_MIN_GAMES,
                  time_period: str = DEFAULT_TIME_PERIOD,
+                 user_group: str = DEFAULT_USER_GROUP,
                  now: Callable[[], datetime] = datetime.now) -> None:
         self.cache_dir = Path(cache_dir)
         self.expansion = expansion
         self.format = fmt
         self.time_period = time_period
+        self.user_group = user_group or ""
         self.client = client or RatingsClient()
         self.on_change = on_change
         self.refresh_hours = refresh_hours
@@ -395,7 +402,7 @@ class RatingsProvider:
             return self._dataset
 
     def _load_cached(self) -> None:
-        cached = self.cache.get(self.expansion, self.format, self.time_period)
+        cached = self.cache.get(self.expansion, self.format, self.time_period, self.user_group)
         if cached is None:
             return
         rows, fetched_at = cached
@@ -456,6 +463,7 @@ class RatingsProvider:
             "expansion": self.expansion,
             "format": self.format,
             "time_period": self.time_period,
+            "user_group": self.user_group,
             "status": state,
             "fetching": fetching,
             "fetched_at": ds.fetched_at if ds else None,
@@ -481,12 +489,13 @@ class RatingsProvider:
             self._last_attempt = time.monotonic()
         self._notify()
         try:
-            rows = self.client.fetch(self.expansion, self.format, self.time_period)
+            rows = self.client.fetch(self.expansion, self.format, self.time_period, self.user_group)
             fetched_at = self._now().isoformat(timespec="seconds")
             ds = Dataset(rows, self.expansion, self.format, fetched_at, self.min_games)
             if len(ds) == 0:
                 raise ValueError(f"17Lands returned no cards for {self.expansion!r}/{self.format!r}")
-            self.cache.put(self.expansion, self.format, rows, fetched_at, self.time_period)
+            self.cache.put(self.expansion, self.format, rows, fetched_at, self.time_period,
+                           self.user_group)
             with self._lock:
                 self._dataset = ds
                 self.error = None

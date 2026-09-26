@@ -10,9 +10,13 @@
   let ratings = {};            // name -> 17Lands numbers (only names with data)
   let lastCommitted = -1;      // to flash the newest pick
 
-  // whether the 17Lands badge is drawn on tiles
+  // whether the 17Lands badge is drawn on tiles, and which player group it uses
   let showRatings = true;
-  try { showRatings = localStorage.getItem("showRatings") !== "0"; } catch (e) { /* ignore */ }
+  let topPlayers = false;
+  try {
+    showRatings = localStorage.getItem("showRatings") !== "0";
+    topPlayers = localStorage.getItem("topPlayers") === "1";
+  } catch (e) { /* ignore */ }
 
   // ---------------------------------------------------------------- utils
   function el(tag, cls, text) {
@@ -42,7 +46,7 @@
     const meta = lastMeta || {};
     const need = meta.min_games || 500;
     const out = [];
-    out.push(`17Lands ${meta.expansion || ""}: ALSA ${fmt1(r.alsa)} (seen ${fmtInt(r.seen_count)}×) · ATA ${fmt1(r.ata)}`);
+    out.push(`17Lands ${meta.expansion || ""}${usingTop() ? " (top players)" : ""}: ALSA ${fmt1(r.alsa)} (seen ${fmtInt(r.seen_count)}×) · ATA ${fmt1(r.ata)}`);
     if (r.gih_wr !== null && r.gih_wr !== undefined) {
       out.push(`GIH WR ${fmtPct(r.gih_wr)} · ${fmtInt(r.gih_games)} games · IWD ${r.iwd === null ? "n/a" : (r.iwd >= 0 ? "+" : "") + (100 * r.iwd).toFixed(1) + "pp"}`);
       if (r.gp_wr !== null) out.push(`GP WR ${fmtPct(r.gp_wr)} · ${fmtInt(r.games)} games · OH WR ${fmtPct(r.oh_wr)}`);
@@ -217,6 +221,10 @@
   // Dataset status plus the honest number: how many cards seen in this
   // draft have no Arena data at all.
   let lastMeta = null;
+  // the top-players dataset is used only when the toggle is on and it has loaded
+  function usingTop() {
+    return topPlayers && !!(lastMeta && lastMeta.top && lastMeta.top.status === "ok");
+  }
   function renderRatingsBar(st) {
     const bar = $("ratings-bar");
     const meta = st.ratings_meta;
@@ -224,13 +232,14 @@
     clear(bar);
     bar.hidden = !meta;
     if (!meta) return;
+    const shown = usingTop() ? meta.top : meta;
     bar.className = "ratings " + meta.status;
     bar.appendChild(el("span", "lbl", "17Lands"));
     bar.appendChild(el("span", "ds", `${meta.expansion} · ${meta.format}`));
     if (meta.status === "ok") {
-      const when = meta.age_hours === null ? "" : (meta.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(meta.age_hours)}h ago`);
+      const when = shown.age_hours === null ? "" : (shown.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(shown.age_hours)}h ago`);
       bar.appendChild(el("span", "muted",
-        `${meta.time_period === "ALL_TIME" ? "all time" : meta.time_period} · ${fmtInt(meta.cards)} cards · ${fmtInt(meta.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
+        `${meta.time_period === "ALL_TIME" ? "all time" : meta.time_period} · ${usingTop() ? "top players" : "all players"} · ${fmtInt(shown.cards)} cards · ${fmtInt(shown.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
       const seen = Object.keys(st.ratings || {}).length + (st.ratings_unmatched || []).length;
       if (seen) {
         const miss = st.ratings_unmatched || [];
@@ -263,6 +272,24 @@
       + "then ALSA (average pick at which the pod last saw it; lower = taken earlier).\n"
       + "Gold = top of the cube by GIH WR, green = next tier. Hover a card for the rest.";
     bar.appendChild(lab);
+    // all players vs 17Lands's top-player group, as on the site's dropdown
+    const topLab = el("label", "opt");
+    const topCb = el("input");
+    topCb.type = "checkbox";
+    topCb.checked = topPlayers;
+    const topReady = !!(meta.top && meta.top.status === "ok");
+    topCb.disabled = !topReady;
+    topCb.addEventListener("change", () => {
+      topPlayers = topCb.checked;
+      try { localStorage.setItem("topPlayers", topPlayers ? "1" : "0"); } catch (e) { /* ignore */ }
+      render(lastState);
+    });
+    topLab.appendChild(topCb);
+    topLab.appendChild(document.createTextNode("top players"));
+    topLab.title = topReady
+      ? "Use the win rates from 17Lands's top-player group only (the site's 'Top' user group)."
+      : (meta.top ? `top-player data: ${meta.top.status}${meta.top.error ? " · " + meta.top.error : ""}` : "top-player data not enabled");
+    bar.appendChild(topLab);
     const key = el("span", "key");
     key.appendChild(el("i", "rate r-hot", "60%"));
     key.appendChild(document.createTextNode(" top tier "));
@@ -574,7 +601,8 @@
     if (!st) return;
     lastState = st;
     cards = st.cards || {};
-    ratings = st.ratings || {};
+    lastMeta = st.ratings_meta;
+    ratings = (usingTop() ? st.ratings_top : st.ratings) || {};
     renderRatingsBar(st);
     renderHeader(st);
     renderTaken(st);

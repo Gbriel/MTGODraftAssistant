@@ -18,5 +18,6 @@ enabled = true
 expansion = "Cube - Powered"   # "Cube" is the unpowered Arena cube
 format = "PremierDraft"        # 17Lands "event type"; TradDraft also has cube data
 time_period = "ALL_TIME"       # every run of the cube; LATEST_EVENT, LAST_TWO_WEEKS, ... exist
+# Both the all-players and the top-players numbers are fetched; the page has a toggle.
 refresh_hours = 24             # re-download at most this often
 min_games = 500                # hide a win rate below this many games in hand

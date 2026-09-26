@@ -223,6 +223,33 @@ def test_ratings_in_state_with_unmatched_count(tmp_path):
         s.stop()
 
 
+def test_top_players_dataset_is_served_alongside(tmp_path):
+    from mtgo_draft_assistant.ratings import RatingsProvider
+    from test_ratings import FakeClient as FakeRatingsClient, row
+
+    _write(tmp_path / LOG_NAME, os.path.join(SNAP_DIR, "snap_003_4676b.txt"), 1_700_000_000.0)
+    all_rows = [row("Mana Vault", alsa=2.2, gih_wr=0.58, gih_games=9000)]
+    top_rows = [row("Mana Vault", alsa=2.0, gih_wr=0.63, gih_games=1500)]
+    ratings = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=all_rows))
+    top = RatingsProvider(tmp_path / "cache", client=FakeRatingsClient(rows=top_rows), user_group="top")
+    s = DraftServer(tmp_path, port=0, interval=0.05, ratings=ratings, ratings_top=top)
+    s.start()
+    try:
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            m = st["ratings_meta"]
+            if m and m["status"] == "ok" and m["top"] and m["top"]["status"] == "ok" and st["ratings_top"]:
+                break
+            time.sleep(0.05)
+        assert st["ratings"]["Mana Vault"]["gih_wr"] == 0.58
+        assert st["ratings_top"]["Mana Vault"]["gih_wr"] == 0.63
+        assert st["ratings_meta"]["top"]["user_group"] == "top"
+        assert st["ratings_meta"]["user_group"] == ""
+    finally:
+        s.stop()
+
+
 def test_ratings_status_reaches_idle_state(tmp_path):
     from mtgo_draft_assistant.ratings import RatingsProvider
     from test_ratings import FakeClient as FakeRatingsClient
