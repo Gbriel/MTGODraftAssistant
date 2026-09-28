@@ -259,6 +259,35 @@ body {
 .find-status.s-screen { color: var(--accent); }
 .find-status.s-unseen { color: var(--back); }
 
+/* deck pane (Arena): submitted deck, and during a game the library tracker */
+.game {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px 10px;
+  margin-bottom: 12px;
+  background: var(--pane-2);
+}
+.game .head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
+.game .head .pos { color: var(--accent); font-weight: 600; }
+.game .head .lib { color: var(--flight); font-weight: 600; }
+.game .head .warn { color: #f0c890; }
+.tile .qty {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font: 700 10px/1.3 var(--mono);
+  color: #fff;
+  background: rgba(20, 22, 28, .85);
+  border: 1px solid rgba(255,255,255,.2);
+  pointer-events: none;
+  z-index: 1;
+}
+.tile.side { opacity: .8; }
+.tile.theirs { outline: 2px solid var(--gone); outline-offset: 1px; border-radius: 4px; }
+
 details.picks { margin-top: 16px; min-height: 0; }
 details.picks summary { cursor: pointer; list-style: none; }
 details.picks summary::-webkit-details-marker { display: none; }

@@ -217,7 +217,10 @@ class CardCache:
     def get_arena(self, grp_id: int) -> tuple[bool, str | None]:
         """(known, name): known=False if never looked up; name=None if looked up and missing."""
         with self._lock:
-            row = self._db.execute("SELECT name FROM arena_ids WHERE grp_id=?", (int(grp_id),)).fetchone()
+            try:
+                row = self._db.execute("SELECT name FROM arena_ids WHERE grp_id=?", (int(grp_id),)).fetchone()
+            except sqlite3.ProgrammingError:      # closed during shutdown
+                return (False, None)
         return (row is not None, row[0] if row else None)
 
     def put_arena(self, grp_id: int, name: str | None) -> None:
@@ -228,11 +231,14 @@ class CardCache:
 
     def get(self, name: str) -> CardInfo | None:
         with self._lock:
-            row = self._db.execute(
-                "SELECT name,status,scryfall_id,scryfall_name,colors,color_identity,"
-                "type_line,mana_cost,cmc,image_url,image_file FROM cards WHERE name=?",
-                (name,),
-            ).fetchone()
+            try:
+                row = self._db.execute(
+                    "SELECT name,status,scryfall_id,scryfall_name,colors,color_identity,"
+                    "type_line,mana_cost,cmc,image_url,image_file FROM cards WHERE name=?",
+                    (name,),
+                ).fetchone()
+            except sqlite3.ProgrammingError:      # closed during shutdown
+                return None
         if row is None:
             return None
         return CardInfo(

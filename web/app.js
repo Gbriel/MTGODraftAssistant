@@ -633,6 +633,89 @@
     }
   }
 
+  // ----------------------------------------------------------------- deck
+  // Arena only: the deck you submitted, and during a game what is still in
+  // your library (deck minus every card of yours seen outside it).
+  const deckPane = $("pane-deck");
+  try { deckPane.open = localStorage.getItem("deckOpen") !== "0"; } catch (e) { /* ignore */ }
+  deckPane.addEventListener("toggle", () => {
+    try { localStorage.setItem("deckOpen", deckPane.open ? "1" : "0"); } catch (e) { /* ignore */ }
+  });
+  const DECK_GROUPS = ["W", "U", "B", "R", "G", "M", "C", "L", "X"];
+  function sortByGroup(list) {
+    return list.slice().sort((a, b) => {
+      const ga = DECK_GROUPS.indexOf(group(a.name)), gb = DECK_GROUPS.indexOf(group(b.name));
+      if (ga !== gb) return ga - gb;
+      const ia = info(a.name), ib = info(b.name);
+      const ca = ia ? ia.cmc : 99, cb = ib ? ib.cmc : 99;
+      return ca !== cb ? ca - cb : a.name.localeCompare(b.name);
+    });
+  }
+  // a tile with a count badge when n > 1 (basic lands, duplicates)
+  function countTile(c, cls, title) {
+    const t = tile(c.name, "sm", cls, title);
+    if (c.n > 1) t.appendChild(el("div", "qty", `×${c.n}`));
+    if (!c.named) t.title += "\nArena card id with no name yet";
+    return t;
+  }
+  function tileRowOf(list, cls, titleFor) {
+    const row = el("div", "tilerow");
+    for (const c of list) row.appendChild(countTile(c, cls, titleFor ? titleFor(c) : ""));
+    return row;
+  }
+
+  function renderDeck(st) {
+    const ag = st.arena_game;
+    deckPane.hidden = !ag || (!ag.deck && !ag.game);
+    if (deckPane.hidden) return;
+    const box = $("deck");
+    clear(box);
+    const d = ag.deck;
+    $("deck-count").textContent = d ? `${d.main_count} main · ${d.side_count} side` : "no deck submitted in this log";
+    if (d) {
+      box.appendChild(el("div", "group-head", `Main deck · ${d.main_count}`));
+      box.appendChild(tileRowOf(sortByGroup(d.main), "", () => "main deck"));
+      if (d.side.length) {
+        box.appendChild(el("div", "group-head", `Sideboard · ${d.side_count}`));
+        box.appendChild(tileRowOf(sortByGroup(d.side), "side", () => "sideboard"));
+      }
+    }
+
+    const gbox = $("game");
+    clear(gbox);
+    const g = ag.game;
+    gbox.hidden = !g;
+    if (!g) return;
+    const head = el("div", "head");
+    head.appendChild(el("span", "pos", g.over ? `Game ${g.game_number || "?"} over` : `Game ${g.game_number || "?"}${g.turn ? " · turn " + g.turn : ""}`));
+    if (g.opponent) head.appendChild(el("span", "muted", `vs ${g.opponent}`));
+    const me = g.my_seat, lifeMe = me !== null ? g.life[String(me)] : undefined;
+    const lifeOpp = Object.entries(g.life).filter(([s]) => String(s) !== String(me)).map(([, v]) => v)[0];
+    if (lifeMe !== undefined) head.appendChild(el("span", "muted", `life ${lifeMe} – ${lifeOpp === undefined ? "?" : lifeOpp}`));
+    if (g.library !== null) head.appendChild(el("span", "lib", `${g.library} in library`));
+    if (!g.seat_known) head.appendChild(el("span", "warn", "seat not known yet"));
+    gbox.appendChild(head);
+
+    if (g.remaining) {
+      const total = g.remaining.reduce((s, c) => s + c.n, 0);
+      gbox.appendChild(el("div", "group-head", `Still in your library · ${total}${g.library !== null && total !== g.library ? ` (library shows ${g.library})` : ""}`));
+      gbox.appendChild(tileRowOf(sortByGroup(g.remaining), "", (c) =>
+        g.library ? `${c.n} of ${g.library} · ${(100 * c.n / g.library).toFixed(0)}% to draw next` : ""));
+      if (g.unexpected.length) {
+        gbox.appendChild(el("div", "group-head", "Seen but not in the submitted main deck"));
+        gbox.appendChild(tileRowOf(sortByGroup(g.unexpected), "side", () => "sideboarded in, or the deck changed"));
+      }
+    } else {
+      gbox.appendChild(el("div", "group-head", `Your cards seen this game · ${g.seen_mine.reduce((s, c) => s + c.n, 0)}`));
+      gbox.appendChild(tileRowOf(sortByGroup(g.seen_mine), "", () => "in hand, on the battlefield, in the graveyard or exile"));
+      gbox.appendChild(el("p", "empty", "No deck submission in this log, so the library cannot be worked out."));
+    }
+    if (g.seen_theirs.length) {
+      gbox.appendChild(el("div", "group-head", `Opponent has shown · ${g.seen_theirs.reduce((s, c) => s + c.n, 0)}`));
+      gbox.appendChild(tileRowOf(sortByGroup(g.seen_theirs), "theirs", () => "opponent's card, seen"));
+    }
+  }
+
   // remember whether the picks drawer was left open
   const picksPane = $("pane-picks");
   try { picksPane.open = localStorage.getItem("picksOpen") === "1"; } catch (e) { /* ignore */ }
@@ -666,6 +749,7 @@
     renderUpcoming(st);
     renderWheels(st);
     renderPool(st);
+    renderDeck(st);
     renderPicks(st);
   }
 

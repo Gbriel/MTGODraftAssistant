@@ -95,6 +95,12 @@ class AutoWatcher:
                 self.current = fresh
             return fresh
 
+    def deck(self):
+        return self.arena.deck() if self.source == "arena" else None
+
+    def game(self):
+        return self.arena.game() if self.source == "arena" else None
+
     def rebuild(self) -> Update | None:
         """Re-render an Arena draft after card names arrived; MTGO needs nothing."""
         with self._lock:

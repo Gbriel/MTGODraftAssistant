@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import threading
 from collections.abc import Callable
 from dataclasses import asdict
@@ -28,6 +29,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
+from .arena_cards import ArenaCardDb
 from .arena_log import ArenaWatcher
 from .auto_watcher import AutoWatcher
 from .config import save_log_dir
@@ -78,7 +80,8 @@ def build_state(update: Update | None, analysis: Analysis | None,
                 ratings_meta: dict | None = None,
                 ratings_unmatched: list[str] | None = None,
                 pool: PoolReport | None = None,
-                ratings_sets: dict[str, dict[str, CardRating]] | None = None) -> dict:
+                ratings_sets: dict[str, dict[str, CardRating]] | None = None,
+                arena_game: dict | None = None) -> dict:
     """JSON-serialisable view of everything the UI needs."""
     min_games = (ratings_meta or {}).get("min_games", 0)
     base = {
@@ -107,6 +110,8 @@ def build_state(update: Update | None, analysis: Analysis | None,
         "ratings_meta": ratings_meta,           # None when ratings are disabled
         "ratings_unmatched": list(ratings_unmatched or []),
         "pool": pool.to_json() if pool is not None else None,
+        # Arena only: the submitted deck and, during a game, what is still in the library
+        "arena_game": arena_game,
     }
     if update is None or analysis is None:
         return base
@@ -353,11 +358,13 @@ class DraftServer:
                  watcher: DraftWatcher | ArenaWatcher | AutoWatcher | None = None,
                  cube: CubeList | None = None,
                  arena_cube: RatingsProvider | None = None,
-                 ratings_sets: dict[str, RatingsProvider] | None = None) -> None:
+                 ratings_sets: dict[str, RatingsProvider] | None = None,
+                 arena_db: ArenaCardDb | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
         self.interval = interval
         self.verbose = verbose
         self._ui_version = ui_version()
+        self.arena_db = arena_db                # Arena's own card database: names every id, offline
         self.resolver = resolver
         self.ratings = ratings
         # alternates for the page's toggles: {"PERIOD|group": provider}
@@ -437,7 +444,15 @@ class DraftServer:
         return update.draft.source if (self.auto or self.arena) else "mtgo"
 
     def _arena_name(self, grp_id: int) -> str | None:
-        """Arena card id -> name: 17Lands first (no network), then Scryfall (cached, async)."""
+        """
+        Arena card id -> name. Arena's own database first (complete, offline),
+        then 17Lands (no network), then Scryfall's arena lookup (cached, async;
+        it does not know Arena-only printings such as id 101033, Dismember).
+        """
+        if self.arena_db is not None:
+            name = self.arena_db.name(grp_id)
+            if name:
+                return name
         for provider in self._providers():
             name = provider.arena_name(grp_id)
             if name:
@@ -463,30 +478,85 @@ class DraftServer:
             return self._cube_from_ratings
         return None
 
+    def _arena_game_state(self, source: str) -> dict | None:
+        """Deck and live game for an Arena draft, with card ids named."""
+        if source != "arena" or not hasattr(self.watcher, "deck"):
+            return None
+        deck = self.watcher.deck()
+        game = self.watcher.game()
+        if deck is None and game is None:
+            return None
+
+        def card(grp: int, n: int) -> dict:
+            name = self._arena_name(grp)
+            return {"grp": grp, "name": name or f"#{grp}", "n": n, "named": name is not None}
+
+        out: dict = {"deck": None, "game": None}
+        if deck is not None:
+            out["deck"] = {
+                "event": deck.event_name, "submitted_at": deck.submitted_at,
+                "main": [card(g, q) for g, q in deck.main],
+                "side": [card(g, q) for g, q in deck.side],
+                "main_count": deck.main_count, "side_count": deck.side_count,
+            }
+        if game is not None:
+            out["game"] = {
+                **{k: game[k] for k in ("match_id", "game_number", "stage", "over", "turn", "my_seat",
+                                        "opponent", "life", "library", "seat_known")},
+                "remaining": [card(g, n) for g, n in sorted((game["remaining"] or {}).items())]
+                             if game["remaining"] is not None else None,
+                "seen_mine": [card(g, n) for g, n in game["seen_mine"].items()],
+                "unexpected": [card(g, n) for g, n in game["unexpected"].items()],
+                "seen_theirs": [card(g, n) for g, n in game["seen_theirs"].items()],
+            }
+        return out
+
+    @staticmethod
+    def _game_names(state: dict | None) -> list[str]:
+        if not state:
+            return []
+        names: list[str] = []
+        for part in (state.get("deck") or {}).get("main", []), (state.get("deck") or {}).get("side", []):
+            names += [c["name"] for c in part if c["named"]]
+        g = state.get("game") or {}
+        for key in ("remaining", "seen_mine", "seen_theirs", "unexpected"):
+            names += [c["name"] for c in (g.get(key) or []) if c["named"]]
+        return names
+
+    def _name_errors(self, errors: list[str]) -> list[str]:
+        """Scryfall error lines mention Arena ids; add the card's name when we know it."""
+        def sub(m) -> str:
+            grp = int(m.group(1))
+            name = self._arena_name(grp)
+            return f"arena {grp} ({name})" if name else f"arena {grp} (name unknown)"
+        return [re.sub(r"arena (\d+)", sub, e) for e in errors]
+
     def _publish(self, update: Update, analysis: Analysis) -> None:
         names = draft_card_names(update)
-        cube = self.current_cube(self._active_source(update))
+        source = self._active_source(update)
+        cube = self.current_cube(source)
         pool = pool_state(update.draft, analysis, cube)
+        arena_game = self._arena_game_state(source)
         cards: dict[str, CardInfo] = {}
         pending = 0
         errors: list[str] = []
         if self.resolver is not None:
-            self.resolver.request(names)
-            cards = self.resolver.lookup(names)
+            wanted = names + [n for n in self._game_names(arena_game) if n not in names]
+            self.resolver.request(wanted)
+            cards = self.resolver.lookup(wanted)
             pending = self.resolver.pending
-            errors = self.resolver.errors[-5:]
+            errors = self._name_errors(self.resolver.errors[-5:])
         ratings: dict[str, CardRating] = {}
         unmatched: list[str] = []
         if self.ratings is not None:
             ratings, unmatched = self.ratings.lookup(names)
         sets = {key: p.lookup(names)[0] for key, p in self.ratings_sets.items()}
-        source = self._active_source(update)
         log_dir = update.path.parent if source == "arena" else self.log_dir
         self.store.set(self._decorate(build_state(
             update, analysis, log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=self._ratings_meta(), ratings_unmatched=unmatched,
-            pool=pool, ratings_sets=sets,
+            pool=pool, ratings_sets=sets, arena_game=arena_game,
         ), source))
 
     def _publish_idle(self) -> None:

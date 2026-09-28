@@ -220,6 +220,52 @@ Fixtures extracted verbatim in `tests/fixtures/arena/`.
   does **not** accept `arena_id` identifiers). Unresolved ids are shown as
   `#<id>` until they resolve, and the same card JSON seeds colours and images.
 
+### 2.6 Arena decks and games
+
+Verified 2026-09-28 against five deck submissions and four matches in real
+logs. Fixture: `tests/fixtures/arena/arena_match_opening.log` (the first
+turns of one match, verbatim lines).
+
+- **Deck submission:** `==> EventSetDeckV3 {"request": "<json>"}` when you
+  submit after building. `EventName` ties it to the draft's event;
+  `Deck.MainDeck` and `Deck.Sideboard` are `[{"cardId", "quantity"}]`. It is
+  logged once per submission, not per game, so a sideboarded game 2 shows
+  cards "seen but not in the submitted main deck" rather than a new list.
+- **Match lifecycle:** a JSON line with `matchGameRoomStateChangedEvent`:
+  `stateType` `MatchGameRoomStateType_Playing` then `..._MatchCompleted`;
+  `gameRoomConfig.reservedPlayers[]` has `playerName` and `systemSeatId`,
+  `finalMatchResult.resultList` the game results.
+- **Game state:** JSON lines with `greToClientEvent.greToClientMessages[]`;
+  type `GREMessageType_GameStateMessage` carries `gameStateMessage`.
+  `GameStateType_Full` at `GameStage_Start` (zones present, empty), then
+  `GameStateType_Diff`. **A diff's `zones` carry the complete
+  `objectInstanceIds` of every changed zone**, and `gameObjects` the changed
+  objects, with `grpId` only when visible to you. `gameInfo.stage` turns
+  `GameStage_GameOver`. `turnInfo.turnNumber`, `players[].lifeTotal`.
+- **Your seat:** the owner of the hand zone whose objects have a `grpId`;
+  the opponent's hand lists ids with no objects. Same seat as the message's
+  `systemSeatIds`. Verified on matches where the account sat in seat 1 and
+  in seat 2.
+- **Ids change on zone moves:** `AnnotationType_ObjectIdChanged` with
+  `orig_id` / `new_id` details. Reading zone membership and looking objects
+  up by id is what makes the count right; a cumulative object map would
+  double count.
+- **Library is hidden**, so "still in your library" = submitted main deck
+  minus your cards in hand, battlefield, graveyard, exile and stack. Checked
+  on all four games: library size plus cards seen was exactly 40 every time.
+- **Size:** 1.2–2.5 MB of log per match. Parsing stays incremental.
+
+### 2.7 Arena card database
+
+`C:\Program Files\Wizards of the Coast\MTGA\MTGA_Data\Downloads\Raw\Raw_CardDatabase_<hash>.mtga`
+is SQLite; the hash changes each client update (glob, newest mtime wins).
+`Cards.GrpId` is the log's id; `Cards.TitleId` joins
+`Localizations_enUS.LocId` with `Formatted = 1` for the English name, which
+may contain `<nobr>` markup. 27,071 cards on 2026-09-28. **It names ids
+Scryfall's `/cards/arena/{id}` does not**: Arena-only printings such as
+expansion code `ANA` (id 101033 = Dismember), 45 of them in one cache. It
+is the first source for names; 17Lands and Scryfall follow. Read-only.
+
 ---
 
 ## 3. The analysis, spelled out
@@ -308,6 +354,8 @@ dependency has earned its place yet).
 src/mtgo_draft_assistant/
     draft_log.py     # parser — WRITTEN AND TESTED, see tests/
     arena_log.py     # Arena Player.log parser + tail watcher -> same Draft — DONE
+    arena_game.py    # Arena deck submissions + live game state (library tracker) — DONE
+    arena_cards.py   # Arena's own card database: id -> name, offline — DONE
     watcher.py       # poll the draft dir, emit state on change — DONE (M1)
     analysis.py      # wheel diff, in-flight, pod size inference — DONE (M2)
     pool.py          # per-card state from your seat — DONE (M3)

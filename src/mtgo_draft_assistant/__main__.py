@@ -14,6 +14,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
+from .arena_cards import open_default as open_arena_db
 from .arena_log import DEFAULT_LOG as DEFAULT_ARENA_LOG
 from .arena_log import ArenaWatcher
 from .auto_watcher import AutoWatcher
@@ -129,11 +130,15 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:  # a missing file or a dead URL should not stop the tracker
             print(f"warning: cube list {cube_spec!r} not loaded: {e}", file=sys.stderr, flush=True)
 
+    arena_db = None if args.mtgo else open_arena_db()
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
                          resolver=resolver, ratings=ratings, ratings_sets=ratings_sets,
-                         watcher=watcher, cube=cube, arena_cube=arena_cube)
+                         watcher=watcher, cube=cube, arena_cube=arena_cube, arena_db=arena_db)
     server.start()
+    if not args.mtgo:
+        print(f"Arena card database: {arena_db.path if arena_db else 'not found (names fall back to 17Lands and Scryfall)'}",
+              flush=True)
     if cube is not None:
         print(f"Cube list: {cube.name} ({len(cube)} cards, {cube.source})", flush=True)
     elif not args.mtgo and ratings is not None:

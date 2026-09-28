@@ -82,11 +82,20 @@ python -m mtgo_draft_assistant --arena
 
 Arena must have **Options → Account → Detailed Logs (Plugin Support)** turned
 on; the tool then tails `Player.log` (read-only, like everything else) and shows
-the same panes. Arena logs card ids rather than names, so the first draft of a
-new set takes a few seconds to name every card; cube cards are named instantly
-from the 17Lands data. Arena does not log the pod, so the player count is
+the same panes. Arena logs card ids rather than names; they are named from
+Arena's own card database on your machine, so it works offline and covers
+Arena-only printings. Arena does not log the pod, so the player count is
 inferred from the first pack that wheels back and shown as "assumed" until
 then. Use `--arena-log PATH` if your log lives somewhere unusual.
+
+**Deck pane (Arena only).** Once you submit a deck the pane shows your main
+deck and sideboard. While a game is running it shows the turn, life totals,
+how many cards are in your library, and which cards are still in it, worked
+out as your deck minus every card of yours seen in hand, on the battlefield,
+in the graveyard or in exile. Hover a card for its chance to be your next
+draw. Cards the opponent has shown are listed underneath. If you sideboard
+between games, the new cards appear as "seen but not in the submitted main
+deck", because Arena logs the deck only once.
 
 ## 17Lands ratings
 

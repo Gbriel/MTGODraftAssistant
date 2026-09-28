@@ -93,6 +93,15 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   §2.5 has the verified format, including the repeated-notify and
   duplicate-pick traps. Fixtures in `tests/fixtures/arena/` are verbatim
   extracts of a real log.
+- **Arena deck + game tracker done** — `arena_game.py` reads the submitted
+  deck (`EventSetDeckV3`) and live game state (`greToClientEvent` zones and
+  objects) and computes what is still in your library; the Deck pane shows
+  the deck, and during a game the remaining cards with draw odds plus what
+  the opponent has shown. DESIGN.md §2.6 has the verified message shapes.
+  `arena_cards.py` reads Arena's own card database (read-only SQLite under
+  Program Files) and is the **first** source for card names; Scryfall's
+  arena-id lookup misses Arena-only printings (§2.7). Any error or unmatched
+  line that mentions an id must also carry the name (user request).
 - **Second MTGO corpus** — `tests/fixtures/drafts/` holds two more complete
   MTGO logs; `test_corpus.py` runs every invariant over all of them and will
   pick up any new log dropped in.

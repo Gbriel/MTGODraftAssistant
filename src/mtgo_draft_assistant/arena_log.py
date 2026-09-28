@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .arena_game import ArenaGameParser, DeckList, MatchState, game_view
 from .draft_log import Draft, Pick
 from .watcher import FileStamp, Update
 
@@ -294,10 +295,12 @@ class ArenaWatcher:
         self.namer = namer
         self._lock = threading.Lock()
         self._parser = ArenaLogParser()
+        self._games = ArenaGameParser()      # deck submissions and live game state
         self._offset = 0
         self._partial = b""
         self._tail = b""                 # last bytes consumed, to detect a rewrite in place
         self._seen_version = -1
+        self._seen_game_version = -1
         self._seen_draft: str | None = None
         self.current: Update | None = None
 
@@ -311,10 +314,12 @@ class ArenaWatcher:
 
     def _reset(self) -> None:
         self._parser = ArenaLogParser()
+        self._games = ArenaGameParser()
         self._offset = 0
         self._partial = b""
         self._tail = b""
         self._seen_version = -1
+        self._seen_game_version = -1
         self._seen_draft = None
 
     TAIL_CHECK = 256
@@ -361,17 +366,26 @@ class ArenaWatcher:
             return None
         self._partial = data[cut + 1:]
         for raw in data[:cut].split(b"\n"):
-            self._parser.feed_line(raw.decode("utf-8", errors="replace").rstrip("\r"))
+            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+            self._parser.feed_line(line)
+            self._games.feed_line(line)
         return self._emit(FileStamp(path=self.log_path, size=st.st_size, mtime_ns=st.st_mtime_ns))
 
     def _emit(self, stamp: FileStamp) -> Update | None:
         cur = self._parser.current
-        if cur is None or self._parser.version == self._seen_version:
+        draft_changed = self._parser.version != self._seen_version
+        game_changed = self._games.version != self._seen_game_version
+        if not draft_changed and not game_changed:
+            return None
+        if cur is None and self._games.match is None and self._games.latest_deck is None:
             return None
         self._seen_version = self._parser.version
-        new_draft = cur.draft_id != self._seen_draft
-        self._seen_draft = cur.draft_id
-        draft = to_draft(cur, self.namer)
+        self._seen_game_version = self._games.version
+        draft_id = cur.draft_id if cur is not None else None
+        new_draft = draft_id != self._seen_draft
+        self._seen_draft = draft_id
+        draft = to_draft(cur, self.namer) if cur is not None else Draft(source="arena",
+                                                                        pod_size_hint=ARENA_POD_SIZE_HINT)
         update = Update(path=self.log_path, text="", draft=draft, new_draft=new_draft, stamp=stamp)
         self.current = update
         return update
@@ -380,9 +394,9 @@ class ArenaWatcher:
         """Re-render the current draft (card names may have arrived)."""
         with self._lock:
             cur = self._parser.current
-            if cur is None or self.current is None:
+            if self.current is None:
                 return None
-            draft = to_draft(cur, self.namer)
+            draft = to_draft(cur, self.namer) if cur is not None else self.current.draft
             update = Update(path=self.log_path, text="", draft=draft, new_draft=False,
                             stamp=self.current.stamp)
             self.current = update
@@ -393,10 +407,35 @@ class ArenaWatcher:
         with self._lock:
             return self._parser.current
 
+    # -- deck and game
+    def deck(self) -> DeckList | None:
+        """The deck submitted for the current draft's event, else the latest one."""
+        with self._lock:
+            cur = self._parser.current
+            return self._games.deck_for(cur.event_name if cur is not None else None)
+
+    def match(self) -> MatchState | None:
+        with self._lock:
+            return self._games.match
+
+    def game(self) -> dict | None:
+        """The live game view (see :func:`arena_game.game_view`), or None."""
+        with self._lock:
+            cur = self._parser.current
+            deck = self._games.deck_for(cur.event_name if cur is not None else None)
+            return game_view(self._games.match, deck)
+
     def last_activity(self) -> datetime | None:
-        """When the current draft last changed, by the log's own clock."""
-        cur = self.arena_draft
-        return cur.last_event_time if cur is not None else None
+        """When the draft or a game last changed, by the log's own clock."""
+        with self._lock:
+            times = []
+            cur = self._parser.current
+            if cur is not None and cur.last_event_time is not None:
+                times.append(cur.last_event_time)
+            gt = self._games.last_event_time
+            if gt is not None:
+                times.append(gt)
+        return max(times) if times else None
 
     # -- loop
     def run(self, callback: Callable[[Update], None],
