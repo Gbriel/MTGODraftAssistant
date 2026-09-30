@@ -25,6 +25,7 @@ cached in SQLite, refreshed at most once per ``refresh_hours``.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import time
@@ -47,6 +48,39 @@ DEFAULT_USER_GROUP = ""                 # all players; "top" | "middle" | "botto
 DEFAULT_REFRESH_HOURS = 24.0
 DEFAULT_MIN_GAMES = 500                 # hide a win rate below this many GIH games
 RETRY_AFTER_FAILURE = 60.0              # seconds before another attempt after an error
+
+
+# -- which dataset a draft belongs to ------------------------------------------
+
+EVENT_TYPES = {
+    # Arena event-name prefix -> 17Lands event_type
+    "PremierDraft": "PremierDraft", "TradDraft": "TradDraft", "QuickDraft": "QuickDraft",
+    "PickTwoDraft": "PickTwoDraft", "Sealed": "Sealed", "TradSealed": "TradSealed",
+    "CubeDraft": "PremierDraft", "BotDraft": "QuickDraft", "CompDraft": "CompDraft",
+}
+_EVENT = re.compile(r"^(?P<kind>[A-Za-z]+?Draft|TradSealed|Sealed)_(?P<rest>.+?)(?:_(?P<date>\d{8}))?$")
+CUBE_EXPANSIONS = {"powered": "Cube - Powered", "planar": "Cube - Planar", "chaos": "Chaos"}
+
+
+def dataset_for_event(event_name: str | None) -> tuple[str, str] | None:
+    """
+    (expansion, event_type) on 17Lands for an Arena event name, or None.
+    ``PremierDraft_FRA_20260929`` -> ("FRA", "PremierDraft");
+    ``CubeDraft_Powered_20260908`` -> ("Cube - Powered", "PremierDraft");
+    ``QuickDraft_BLB_20240801`` -> ("BLB", "QuickDraft").
+    """
+    if not event_name:
+        return None
+    m = _EVENT.match(event_name.strip())
+    if not m:
+        return None
+    kind, rest = m.group("kind"), m.group("rest")
+    event_type = EVENT_TYPES.get(kind)
+    if event_type is None:
+        return None
+    if kind == "CubeDraft":
+        return CUBE_EXPANSIONS.get(rest.lower(), "Cube" if rest.isdigit() else f"Cube - {rest}"), event_type
+    return rest, event_type
 
 
 # -- names -------------------------------------------------------------------
@@ -517,3 +551,96 @@ class RatingsProvider:
     def _notify(self) -> None:
         if self.on_change:
             self.on_change()
+
+
+# -- a pool of datasets, created on demand -------------------------------------
+
+
+DatasetKey = tuple[str, str, str, str]      # (expansion, event_type, time_period, user_group)
+
+
+class RatingsPool:
+    """
+    Holds one :class:`RatingsProvider` per (expansion, event type, period,
+    player group) and creates them as drafts need them: a cube draft wants
+    ``Cube - Powered``, a set draft wants that set. All share one client so
+    the pulls go out one at a time. Without a ``cache_dir`` the pool cannot
+    create providers and serves only those added to it (tests).
+    """
+
+    PERIOD_ALT = "LATEST_EVENT"
+
+    def __init__(self, cache_dir: str | Path | None = None, client: RatingsClient | None = None,
+                 refresh_hours: float = DEFAULT_REFRESH_HOURS, min_games: int = DEFAULT_MIN_GAMES,
+                 default: tuple[str, str] = (DEFAULT_EXPANSION, DEFAULT_FORMAT),
+                 time_period: str = DEFAULT_TIME_PERIOD,
+                 on_change: Callable[[], None] | None = None) -> None:
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+        self.client = client or RatingsClient()
+        self.refresh_hours = refresh_hours
+        self.min_games = min_games
+        self.default = default
+        self.time_period = time_period
+        self.on_change = on_change
+        self._providers: dict[DatasetKey, RatingsProvider] = {}
+        self._lock = threading.Lock()
+        self._started = False
+
+    @staticmethod
+    def key_of(p: RatingsProvider) -> DatasetKey:
+        return (p.expansion, p.format, p.time_period, p.user_group or "")
+
+    def add(self, p: RatingsProvider) -> RatingsProvider:
+        with self._lock:
+            self._providers[self.key_of(p)] = p
+            p.on_change = self.on_change
+            if self._started:
+                p.start()
+        return p
+
+    def get(self, expansion: str, fmt: str, time_period: str | None = None,
+            user_group: str = "", create: bool = True) -> RatingsProvider | None:
+        key = (expansion, fmt, time_period or self.time_period, user_group or "")
+        with self._lock:
+            p = self._providers.get(key)
+        if p is not None or not create or self.cache_dir is None:
+            return p
+        p = RatingsProvider(self.cache_dir, expansion=expansion, fmt=fmt, client=self.client,
+                            refresh_hours=self.refresh_hours, min_games=self.min_games,
+                            time_period=key[2], user_group=key[3])
+        return self.add(p)
+
+    def sets_for(self, expansion: str, fmt: str) -> tuple[RatingsProvider | None, dict[str, RatingsProvider]]:
+        """
+        The primary dataset for an expansion plus the alternates the page's
+        toggles switch to, keyed "PERIOD|group". Creates what it can.
+        """
+        primary = self.get(expansion, fmt, self.time_period, "")
+        alts: dict[str, RatingsProvider] = {}
+        periods = [self.time_period] + ([self.PERIOD_ALT] if self.time_period != self.PERIOD_ALT else [])
+        for tp in periods:
+            for ug in ("", "top"):
+                if (tp, ug) == (self.time_period, ""):
+                    continue
+                p = self.get(expansion, fmt, tp, ug)
+                if p is not None:
+                    alts[f"{tp}|{ug}"] = p
+        return primary, alts
+
+    def providers(self) -> list[RatingsProvider]:
+        with self._lock:
+            return list(self._providers.values())
+
+    def start(self) -> None:
+        with self._lock:
+            self._started = True
+            ps = list(self._providers.values())
+        for p in ps:
+            p.start()
+
+    def stop(self) -> None:
+        with self._lock:
+            self._started = False
+            ps = list(self._providers.values())
+        for p in ps:
+            p.stop()

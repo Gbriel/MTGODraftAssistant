@@ -34,7 +34,7 @@ from .ratings import (
     DEFAULT_REFRESH_HOURS,
     DEFAULT_TIME_PERIOD,
     RatingsClient,
-    RatingsProvider,
+    RatingsPool,
 )
 from .scryfall import CardResolver
 from .server import DraftServer
@@ -97,30 +97,20 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = load_config()
     rcfg = ratings_settings(cfg)
-    ratings = None
-    ratings_sets = {}
-    arena_cube = None
+    pool = None
     if not args.no_ratings and rcfg.get("enabled", True):
         expansion = args.ratings_expansion or str(rcfg.get("expansion") or DEFAULT_EXPANSION)
         fmt = args.ratings_format or str(rcfg.get("format") or DEFAULT_FORMAT)
-        refresh = float(rcfg.get("refresh_hours", DEFAULT_REFRESH_HOURS))
-        min_games = int(rcfg.get("min_games", DEFAULT_MIN_GAMES))
-        period = str(rcfg.get("time_period") or DEFAULT_TIME_PERIOD)
-
-        client = RatingsClient()        # shared: the pulls go out one at a time
-
-        def provider(time_period: str, user_group: str = "") -> RatingsProvider:
-            return RatingsProvider(args.cache_dir, expansion=expansion, fmt=fmt, client=client,
-                                   refresh_hours=refresh, min_games=min_games,
-                                   time_period=time_period, user_group=user_group)
-
-        ratings = provider(period)
-        # the page's toggles: all time vs the latest event, all players vs top players
-        periods = [period] + (["LATEST_EVENT"] if period != "LATEST_EVENT" else [])
-        ratings_sets = {f"{tp}|{ug}": provider(tp, ug)
-                        for tp in periods for ug in ("", "top") if (tp, ug) != (period, "")}
-        # the latest event's card list doubles as the Arena cube for "not seen yet"
-        arena_cube = ratings_sets.get("LATEST_EVENT|")
+        pool = RatingsPool(
+            args.cache_dir, client=RatingsClient(),          # shared: pulls go out one at a time
+            refresh_hours=float(rcfg.get("refresh_hours", DEFAULT_REFRESH_HOURS)),
+            min_games=int(rcfg.get("min_games", DEFAULT_MIN_GAMES)),
+            default=(expansion, fmt),
+            time_period=str(rcfg.get("time_period") or DEFAULT_TIME_PERIOD),
+        )
+        # the default dataset (MTGO drafts, and Arena before a draft is seen) plus the
+        # page's toggles; an Arena set draft adds its own set's datasets on demand
+        pool.sets_for(expansion, fmt)
 
     cube = None
     cube_spec = args.cube or cube_settings(cfg).get("list")
@@ -133,15 +123,15 @@ def main(argv: list[str] | None = None) -> int:
     arena_db = None if args.mtgo else open_arena_db()
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
-                         resolver=resolver, ratings=ratings, ratings_sets=ratings_sets,
-                         watcher=watcher, cube=cube, arena_cube=arena_cube, arena_db=arena_db)
+                         resolver=resolver, ratings_pool=pool,
+                         watcher=watcher, cube=cube, arena_db=arena_db)
     server.start()
     if not args.mtgo:
         print(f"Arena card database: {arena_db.path if arena_db else 'not found (names fall back to 17Lands and Scryfall)'}",
               flush=True)
     if cube is not None:
         print(f"Cube list: {cube.name} ({len(cube)} cards, {cube.source})", flush=True)
-    elif not args.mtgo and ratings is not None:
+    elif not args.mtgo and pool is not None:
         print("Cube list: 17Lands card list for Arena drafts; none for MTGO (set [cube] list)", flush=True)
     if args.arena:
         print(f"Watching Arena log {watcher.log_path}", flush=True)
@@ -152,12 +142,13 @@ def main(argv: list[str] | None = None) -> int:
               "showing whichever drafted most recently", flush=True)
     if resolver is not None:
         print(f"Card data cached in {args.cache_dir}", flush=True)
-    if ratings is not None:
-        st = ratings.status()
+    if pool is not None:
+        primary = pool.get(*pool.default, create=False)
+        st = primary.status() if primary else {"cards": 0}
         have = f"{st['cards']} cards cached from {st['fetched_at']}" if st["cards"] else "no cache yet"
-        print(f"17Lands ratings: {ratings.expansion} / {ratings.format} / {ratings.time_period} "
-              f"({have}; refreshed every {ratings.refresh_hours:g}h; "
-              f"{len(ratings_sets)} alternate sets for the period / player-group toggles)", flush=True)
+        print(f"17Lands ratings: default {pool.default[0]} / {pool.default[1]} / {pool.time_period} "
+              f"({have}; refreshed every {pool.refresh_hours:g}h). An Arena set draft loads its "
+              f"own set's data automatically.", flush=True)
     print(f"Open {server.url}  (Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(server.url)

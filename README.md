@@ -99,10 +99,13 @@ deck", because Arena logs the deck only once.
 
 ## 17Lands ratings
 
-[17Lands](https://www.17lands.com) publishes card statistics for the **Arena**
-cube. There is no MTGO data, but the Arena powered cube overlaps the MTGO
-Vintage Cube heavily, so the tool downloads the `Cube - Powered` all-time card
-data once a day (about 650KB, cached in `data/cache/`) and joins it by card
+[17Lands](https://www.17lands.com) publishes card statistics for **Arena**
+formats. For an Arena draft the tool picks the dataset from the event you are
+in: a set draft such as `PremierDraft_FRA_20260929` loads that set, a cube
+draft loads `Cube - Powered`. There is no MTGO data, but the Arena powered cube
+overlaps the MTGO Vintage Cube heavily, so MTGO drafts use the `[ratings]`
+expansion from `config.toml`, `Cube - Powered` by default. Each dataset is
+downloaded once a day (about 650KB, cached in `data/cache/`) and joined by card
 name. The numbers are the same ones the 17Lands Card Data page shows.
 
 Each card gets a small badge: its **GIH WR** (games-in-hand win rate: how often

@@ -81,6 +81,10 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   joined by name (front-face and accent-insensitive fallbacks). The badge is
   **GIH WR then ALSA**. A second `LATEST_EVENT` pull defines the current
   Arena cube for the card lookup, since ALL_TIME keeps retired cards.
+  `RatingsPool` holds one provider per (expansion, event type, period,
+  group) and creates them on demand: an Arena draft's event name picks its
+  dataset (`ratings.dataset_for_event`: `PremierDraft_FRA_...` → FRA), MTGO
+  drafts use the configured default. Don't pin a single expansion again.
   `--no-ratings` or a `[ratings]` table in `config.toml` controls it. The
   response carries a 17Lands usage notice; it is surfaced in the README and
   is the user's call.

@@ -411,6 +411,41 @@ def test_arena_mode_uses_17lands_list_as_cube(tmp_path):
         s.stop()
 
 
+def test_arena_set_draft_loads_its_own_17lands_dataset(tmp_path):
+    from mtgo_draft_assistant.arena_log import ArenaWatcher
+    from mtgo_draft_assistant.ratings import RatingsPool
+    from test_ratings import FakeClient as FakeRatingsClient, row
+
+    # the real cube fixture with its event renamed to a set draft
+    text = open(ARENA_COMPLETE, "rb").read().decode("utf-8")
+    text = text.replace("CubeDraft_Powered_20260908", "PremierDraft_FRA_20260929")
+    log = tmp_path / "Player.log"
+    log.write_bytes(text.encode("utf-8"))
+    client = FakeRatingsClient(rows=[row("Bristly Bill, Spine Sower", alsa=3.0, gih_wr=0.55, gih_games=800, mtga_id=90503)])
+    pool = RatingsPool(tmp_path / "cache", client=client)
+    pool.sets_for("Cube - Powered", "PremierDraft")           # what startup seeds
+    s = DraftServer(None, port=0, interval=0.05, ratings_pool=pool, watcher=ArenaWatcher(log, interval=0.05))
+    s.start()
+    try:
+        deadline = time.time() + 6
+        while time.time() < deadline:
+            st = json.loads(_get(s.url + "api/state")[2])
+            m = st["ratings_meta"]
+            if (m and m["expansion"] == "FRA" and m["status"] == "ok" and st["ratings"]
+                    and st["pool"]["cube"] is not None):
+                break
+            time.sleep(0.05)
+        assert st["draft"]["set_name"] == "PremierDraft_FRA_20260929"
+        assert m["expansion"] == "FRA" and m["format"] == "PremierDraft" and m["status"] == "ok"
+        assert set(m["sets"]) == {"ALL_TIME|top", "LATEST_EVENT|", "LATEST_EVENT|top"}
+        assert "Bristly Bill, Spine Sower" in st["ratings"]
+        assert st["pool"]["cube"]["name"].startswith("17Lands FRA")
+    finally:
+        s.stop()
+    expansions = {c[0] for c in client.calls}
+    assert expansions == {"Cube - Powered", "FRA"}
+
+
 def test_auto_mode_switches_source_in_state(tmp_path):
     from datetime import datetime, timedelta
     from mtgo_draft_assistant.auto_watcher import AutoWatcher

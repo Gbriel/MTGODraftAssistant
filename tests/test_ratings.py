@@ -117,6 +117,52 @@ def test_alsa_percentile_is_higher_for_earlier_picks():
     assert ds.get("Black Lotus").gih_pct == 100.0 and ds.get("Ancestral Recall").gih_pct == 0.0
 
 
+def test_dataset_for_event():
+    from mtgo_draft_assistant.ratings import dataset_for_event
+    assert dataset_for_event("PremierDraft_FRA_20260929") == ("FRA", "PremierDraft")
+    assert dataset_for_event("CubeDraft_Powered_20260908") == ("Cube - Powered", "PremierDraft")
+    assert dataset_for_event("CubeDraft_Planar_20250101") == ("Cube - Planar", "PremierDraft")
+    assert dataset_for_event("QuickDraft_BLB_20240801") == ("BLB", "QuickDraft")
+    assert dataset_for_event("TradDraft_MH3_20240611") == ("MH3", "TradDraft")
+    assert dataset_for_event("Sealed_FRA_20260929") == ("FRA", "Sealed")
+    assert dataset_for_event("PickTwoDraft_OM1_20260101") == ("OM1", "PickTwoDraft")
+    assert dataset_for_event("PremierDraft_Y26ECL") == ("Y26ECL", "PremierDraft")
+    assert dataset_for_event("Traditional_Ladder") is None
+    assert dataset_for_event("") is None and dataset_for_event(None) is None
+
+
+def test_pool_creates_datasets_on_demand_and_shares_the_client(tmp_path):
+    from mtgo_draft_assistant.ratings import RatingsPool
+    client = FakeClient()
+    pool = RatingsPool(tmp_path, client=client)
+    primary, alts = pool.sets_for("FRA", "PremierDraft")
+    assert (primary.expansion, primary.format, primary.time_period, primary.user_group) == ("FRA", "PremierDraft", "ALL_TIME", "")
+    assert set(alts) == {"ALL_TIME|top", "LATEST_EVENT|", "LATEST_EVENT|top"}
+    assert all(p.client is client for p in pool.providers())
+    assert pool.get("FRA", "PremierDraft") is primary                  # cached, not recreated
+    assert len(pool.providers()) == 4
+    pool.start()
+    try:
+        assert wait_until(lambda: all(p.status()["status"] == "ok" for p in pool.providers()))
+        # a dataset asked for after start() begins fetching immediately
+        late = pool.get("BLB", "QuickDraft")
+        assert wait_until(lambda: late.status()["status"] == "ok")
+    finally:
+        pool.stop()
+    assert ("FRA", "PremierDraft", "ALL_TIME") in client.calls and ("BLB", "QuickDraft", "ALL_TIME") in client.calls
+
+
+def test_pool_without_cache_dir_only_serves_what_was_added(tmp_path):
+    from mtgo_draft_assistant.ratings import RatingsPool
+    pool = RatingsPool()
+    assert pool.get("FRA", "PremierDraft") is None
+    p = RatingsProvider(tmp_path, client=FakeClient(), expansion="FRA", fmt="PremierDraft")
+    pool.add(p)
+    assert pool.get("FRA", "PremierDraft") is p
+    primary, alts = pool.sets_for("FRA", "PremierDraft")
+    assert primary is p and alts == {}
+
+
 # -- cache -------------------------------------------------------------------
 
 
