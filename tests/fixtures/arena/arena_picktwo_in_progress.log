@@ -1,0 +1,21 @@
+Mono path[0] = 'C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data/Managed'
+
+[UnityCrossThreadLogger]==> EventJoin {"id":"dd58199e-867c-4c48-804e-bb14d6cc0d39","request":"{\"EventName\":\"PickTwoDraft_FRA_20260929\",\"EntryCurrencyType\":\"Gold\",\"EntryCurrencyPaid\":6000,\"CustomTokenId\":null,\"EventChoice\":\"\",\"DebugIgnoreEntryLimits\":false}"}
+[UnityCrossThreadLogger]10/1/2026 10:17:46 AM
+<== EventJoin(dd58199e-867c-4c48-804e-bb14d6cc0d39)
+{"Course":{"CourseId":"14853fd8-c7cf-460d-acba-c1c76ef12c01","InternalEventName":"PickTwoDraft_FRA_20260929","CurrentModule":"PlayerDraft"}}
+[UnityCrossThreadLogger]10/1/2026 10:17:47 AM
+[UnityCrossThreadLogger]Client.SceneChange {"fromSceneName":"EventLanding","toSceneName":"TableDraftQueue","initiator":"System","context":"Entering table draft queue: FRA_PickTwo_Draft"}
+[UnityCrossThreadLogger]10/1/2026 10:17:47 AM
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"a3922c11-cf28-449d-ba22-be3a33fdb918","SelfPick":1,"SelfPack":1,"PackCards":"106226,106263,106335,106411,106280,106320,106362,106396,106503,106342,106463,106449,106481,106423"}
+[UnityCrossThreadLogger]Client.SceneChange {"fromSceneName":"TableDraftQueue","toSceneName":"Draft","initiator":"System","context":"HumanDraft"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"d1a6de52-7878-4e62-9c81-0966260520b1","request":"{\"DraftId\":\"a3922c11-cf28-449d-ba22-be3a33fdb918\",\"GrpIds\":[106342,106362],\"Pack\":1,\"Pick\":1}"}
+[UnityCrossThreadLogger]10/1/2026 10:19:08 AM
+<== EventPlayerDraftMakePick(d1a6de52-7878-4e62-9c81-0966260520b1)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"a3922c11-cf28-449d-ba22-be3a33fdb918","SelfPick":2,"SelfPack":1,"PackCards":"106369,106419,106280,106352,106227,106272,106407,106335,106250,106520,106448,106435"}
+[UnityCrossThreadLogger]==> EventPlayerDraftMakePick {"id":"4334c5b9-025e-45f3-9a86-095a8e68dd6f","request":"{\"DraftId\":\"a3922c11-cf28-449d-ba22-be3a33fdb918\",\"GrpIds\":[106335,106352],\"Pack\":1,\"Pick\":2}"}
+[UnityCrossThreadLogger]10/1/2026 10:19:36 AM
+<== EventPlayerDraftMakePick(4334c5b9-025e-45f3-9a86-095a8e68dd6f)
+{"IsPickSuccessful":true}
+[UnityCrossThreadLogger]Draft.Notify {"draftId":"a3922c11-cf28-449d-ba22-be3a33fdb918","SelfPick":3,"SelfPack":1,"PackCards":"106231,106268,106411,106280,106566,106297,106238,106470,106486,106532"}

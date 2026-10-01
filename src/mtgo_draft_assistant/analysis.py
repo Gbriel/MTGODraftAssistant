@@ -50,6 +50,7 @@ class Analysis:
     wheels: list[WheelDiff] = field(default_factory=list)
     in_flight: list[InFlight] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    cards_per_pick: int = 1
 
 
 # --------------------------------------------------------------------------
@@ -64,6 +65,7 @@ def infer_pod_size(draft: Draft, lo: int = 2, hi: int = 12) -> int | None:
     """
     by = {(p.pack, p.pick): p for p in draft.picks}
     best: int | None = None
+    cpp = max(1, draft.cards_per_pick)
     for n in range(lo, hi + 1):
         pairs = 0
         for (pack, pick), origin in by.items():
@@ -73,7 +75,7 @@ def infer_pod_size(draft: Draft, lo: int = 2, hi: int = 12) -> int | None:
             if ret is None:
                 continue
             passed = set(origin.passed)
-            if not set(ret.available) <= passed or len(passed - set(ret.available)) != n - 1:
+            if not set(ret.available) <= passed or len(passed - set(ret.available)) != (n - 1) * cpp:
                 pairs = -1
                 break
             pairs += 1
@@ -107,13 +109,20 @@ def pod_size(draft: Draft) -> int:
 def pack_sizes(draft: Draft) -> dict[int, int]:
     """
     Cards per booster, per pack number. Derived from the first block seen in
-    each pack: a block at pick ``k`` with ``n`` cards implies ``n + k - 1``.
+    each pack: a block at pick ``k`` with ``n`` cards implies
+    ``n + (k - 1) * cards_per_pick``.
     """
     sizes: dict[int, int] = {}
+    cpp = max(1, draft.cards_per_pick)
     for p in draft.picks:
         if p.pack not in sizes and p.available:
-            sizes[p.pack] = len(p.available) + p.pick - 1
+            sizes[p.pack] = len(p.available) + (p.pick - 1) * cpp
     return sizes
+
+
+def taken_per_lap(draft: Draft, n: int) -> int:
+    """How many cards the rest of the pod removes from a pack in one lap."""
+    return (n - 1) * max(1, draft.cards_per_pick)
 
 
 def current_position(draft: Draft) -> tuple[int | None, int | None]:
@@ -186,9 +195,10 @@ def wheel_diffs(draft: Draft, n: int | None = None) -> tuple[list[WheelDiff], li
                     f"what you passed at P{pack}P{pick}"
                 )
         taken = [c for c in passed if c not in ret_set]
-        if warning is None and len(taken) != n - 1:
+        expected_taken = taken_per_lap(draft, n)
+        if warning is None and len(taken) != expected_taken:
             warning = (
-                f"P{pack}P{pick}: expected {n - 1} cards taken by the pod, "
+                f"P{pack}P{pick}: expected {expected_taken} cards taken by the pod, "
                 f"found {len(taken)}"
             )
         if warning:
@@ -224,12 +234,13 @@ def in_flight(draft: Draft, n: int | None = None) -> list[InFlight]:
         return []
 
     by = _by_position(draft)
+    picks_in_pack = -(-size // max(1, draft.cards_per_pick))     # ceil: 14 cards, 2 per pick -> 7
     out: list[InFlight] = []
     for p in draft.picks:
         if p.pack != cur_pack or not p.complete or p.picked is None:
             continue
         due = p.pick + n
-        if due > size:
+        if due > picks_in_pack:
             continue                # never wheels
         if (p.pack, due) in by:
             continue                # already back (it's a wheel diff now)
@@ -254,6 +265,7 @@ def analyse(draft: Draft) -> Analysis:
         pod_size=n,
         pod_size_source=source,
         pack_sizes=pack_sizes(draft),
+        cards_per_pick=max(1, draft.cards_per_pick),
         current_pack=cur_pack,
         current_pick=cur_pick,
         wheels=wheels,

@@ -155,6 +155,41 @@ def test_no_players_block_yields_warning_not_crash():
     assert in_flight(d) == []
 
 
+def _synthetic_pick_two() -> Draft:
+    """4-player pod, 8-card packs, two cards per pick: pick p wheels at p + 4 with 6 gone."""
+    d = Draft(pod_size_hint=4, source="arena", cards_per_pick=2)
+    p1 = list("ABCDEFGH")
+    d.picks.append(Pick(1, 1, "A", p1, True, also_picked=["B"]))
+    d.picks.append(Pick(1, 2, "I", list("IJKLMN"), True, also_picked=["J"]))
+    d.picks.append(Pick(1, 3, "O", list("OPQR"), True, also_picked=["P"]))
+    d.picks.append(Pick(1, 4, "S", list("ST"), True, also_picked=["T"]))
+    return d
+
+
+def test_pick_two_pack_sizes_and_pool():
+    d = _synthetic_pick_two()
+    assert pack_sizes(d) == {1: 8}
+    assert d.pool == list("ABIJOPST")
+    assert d.picks[0].passed == list("CDEFGH")
+
+
+def test_pick_two_wheel_expects_two_cards_per_seat():
+    d = _synthetic_pick_two()
+    # 6 cards passed at P1P1; the other 3 seats take 2 each: nothing comes back
+    assert in_flight(d) == []                       # 8 cards / 2 = 4 picks; pick 1 + 4 > 4
+    # a 6-player pod with 14-card packs: pick 1 returns at pick 7 with 10 gone
+    e = Draft(pod_size_hint=6, source="arena", cards_per_pick=2)
+    cards = [f"c{i}" for i in range(14)]
+    e.picks.append(Pick(1, 1, "c0", cards, True, also_picked=["c1"]))
+    for k in range(2, 7):
+        e.picks.append(Pick(1, k, f"x{k}", [f"x{k}", f"y{k}"] + [f"z{k}{i}" for i in range(14 - 2 * (k - 1) - 2)], True, also_picked=[f"y{k}"]))
+    e.picks.append(Pick(1, 7, None, ["c5", "c9"], False))      # P1P1 came back with 2 of the 12 passed
+    wheels, warnings = wheel_diffs(e)
+    assert warnings == [] and len(wheels) == 1
+    assert wheels[0].returned == ["c5", "c9"] and len(wheels[0].taken) == 10
+    assert pack_sizes(e) == {1: 14}
+
+
 # -- in flight ---------------------------------------------------------------
 
 

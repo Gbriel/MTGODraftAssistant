@@ -214,6 +214,14 @@ Fixtures extracted verbatim in `tests/fixtures/arena/`.
   (`analysis.infer_pod_size`: the N for which every pack returns at p + N as
   a subset with N - 1 missing). 21/21 clean pairs at N = 8 in all six drafts;
   before the first lap the UI assumes 8 and says so.
+- **Pick-two drafts** (`PickTwoDraft_<SET>_<date>`, seen 2026-10-01): 14-card
+  packs, and every `EventPlayerDraftMakePick` request carries **two**
+  `GrpIds`. `SelfPick` still counts picks (1, 2, 3...), so a pack at pick k
+  has `14 - 2(k - 1)` cards and a booster lasts 7 picks. `Draft.cards_per_pick`
+  carries this through pack sizes, wheel maths (a lap removes
+  `(N - 1) * 2` cards) and the UI. 17Lands has a `PickTwoDraft` event type
+  but the tool uses the set's PremierDraft data for every Arena event type;
+  that is where the sample is.
 - **Naming ids:** 17Lands rows carry `mtga_id`, which named 482 of 506 ids
   seen. The rest are older printings the cube uses; Scryfall
   `GET /cards/arena/{id}` resolves those (its `/cards/collection` endpoint

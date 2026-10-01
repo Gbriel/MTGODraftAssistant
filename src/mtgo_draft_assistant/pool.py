@@ -83,6 +83,7 @@ def pool_state(draft: Draft, analysis: Analysis, cube: CubeList | None = None) -
             cards.append(PoolCard(name, "on_screen", pack, pick))
             continue
         size = analysis.pack_sizes.get(pack, 0)
+        size = -(-size // max(1, analysis.cards_per_pick))        # picks in the booster
         if n <= 0:
             cards.append(PoolCard(name, "gone" if cur_pack is not None and pack < cur_pack else "in_flight",
                                   pack, pick, None, "unknown_pod" if not (cur_pack is not None and pack < cur_pack) else "pack_over"))

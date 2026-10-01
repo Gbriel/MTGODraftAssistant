@@ -68,6 +68,7 @@ class ArenaPick:
     available: list[int]            # grpIds as notified, in Arena's order
     picked: int | None = None
     complete: bool = False
+    also_picked: list[int] = field(default_factory=list)   # second card in a pick-two draft
 
 
 @dataclass
@@ -80,6 +81,7 @@ class ArenaDraft:
     complete: bool = False
     warnings: list[str] = field(default_factory=list)
     last_event_at: str | None = None   # log timestamp preceding the latest draft message
+    cards_per_pick: int = 1            # 2 once a pick request names two cards (PickTwoDraft)
 
     @property
     def last_event_time(self) -> datetime | None:
@@ -119,6 +121,7 @@ def to_draft(ad: ArenaDraft, namer: Namer | None = None) -> Draft:
         set_name=ad.event_name,
         pod_size_hint=ARENA_POD_SIZE_HINT,
         source="arena",
+        cards_per_pick=ad.cards_per_pick,
     )
     for p in ad.ordered_picks:
         d.picks.append(Pick(
@@ -126,6 +129,7 @@ def to_draft(ad: ArenaDraft, namer: Namer | None = None) -> Draft:
             picked=name(p.picked) if p.picked is not None else None,
             available=[name(g) for g in p.available],
             complete=p.complete,
+            also_picked=[name(g) for g in p.also_picked],
         ))
     return d
 
@@ -200,6 +204,7 @@ class ArenaLogParser:
         d = self.drafts.get(draft_id)
         if d is None:
             d = ArenaDraft(draft_id=draft_id, event_name=self._last_event, started_at=self._last_ts)
+            # cards_per_pick is learned from the first pick request, not the event name
             self.drafts[draft_id] = d
             self.current = d
         return d
@@ -241,11 +246,14 @@ class ArenaLogParser:
         if p is None:
             d.warnings.append(f"P{pack}P{pick}: pick logged before its pack was notified")
             return
-        if len(ids) != 1 or ids[0] not in p.available:
+        if not ids or any(g not in p.available for g in ids):
             d.warnings.append(f"P{pack}P{pick}: pick request for card {ids} not in the notified pack; ignored")
             return
         p.picked = ids[0]
+        p.also_picked = list(ids[1:])
         p.complete = True
+        if len(ids) > d.cards_per_pick:
+            d.cards_per_pick = len(ids)         # a pick-two draft names two cards per request
         self._bump(d)
 
     def _response_body(self, line: str) -> None:

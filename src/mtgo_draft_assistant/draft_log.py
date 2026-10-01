@@ -40,11 +40,19 @@ class Pick:
     picked: str | None             # None while the pack is still on screen
     available: list[str]           # every card in the pack, including the pick
     complete: bool = False         # True once "Picked:" confirms it
+    also_picked: list[str] = field(default_factory=list)   # extra cards taken (Arena pick-two)
+
+    @property
+    def picked_all(self) -> list[str]:
+        """Every card taken from this pack: one normally, two in a pick-two draft."""
+        out = [self.picked] if self.picked is not None else []
+        return out + [c for c in self.also_picked if c != self.picked]
 
     @property
     def passed(self) -> list[str]:
         """Cards left in the pack after this pick — i.e. what got passed on."""
-        return [c for c in self.available if c != self.picked]
+        taken = set(self.picked_all)
+        return [c for c in self.available if c not in taken]
 
 
 @dataclass
@@ -57,10 +65,11 @@ class Draft:
     picks: list[Pick] = field(default_factory=list)
     pod_size_hint: int | None = None   # for logs with no player list (Arena); see analysis.pod_size
     source: str = "mtgo"               # "mtgo" | "arena"
+    cards_per_pick: int = 1            # 2 in an Arena pick-two draft
 
     @property
     def pool(self) -> list[str]:
-        return [p.picked for p in self.picks if p.picked]
+        return [c for p in self.picks for c in p.picked_all]
 
     @property
     def current_pack(self) -> Pick | None:

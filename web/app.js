@@ -347,7 +347,7 @@
     const d = st.draft;
     const podNote = { players: "", inferred: " (inferred from wheels)", assumed: " (assumed)", unknown: "" }[d ? d.pod_size_source : "unknown"] || "";
     $("cube").textContent = d
-      ? `${d.source === "arena" ? "Arena" : "MTGO"} · ${d.set_name || "unknown cube"} · Event ${d.source === "arena" ? (d.event_id || "?").slice(0, 8) : (d.event_id || "?")} · ${d.pod_size || "?"} players${podNote}`
+      ? `${d.source === "arena" ? "Arena" : "MTGO"} · ${d.set_name || "unknown cube"} · Event ${d.source === "arena" ? (d.event_id || "?").slice(0, 8) : (d.event_id || "?")} · ${d.pod_size || "?"} players${podNote}${d.cards_per_pick > 1 ? ` · ${d.cards_per_pick} cards per pick` : ""}`
       : "";
     const p = st.position;
     const badge = $("position");
@@ -355,7 +355,8 @@
     if (p.status === "on_screen") badge.textContent = `Pack ${p.pack} · Pick ${p.pick} — on screen`;
     else if (p.status === "waiting") {
       const size = d && d.pack_sizes[String(p.pack)];
-      badge.textContent = size && p.pick > size
+      const picksInPack = size ? Math.ceil(size / (d.cards_per_pick || 1)) : 0;
+      badge.textContent = size && p.pick > picksInPack
         ? `Pack ${p.pack} done — waiting for next pack`
         : `Pack ${p.pack} · Pick ${p.pick} — waiting`;
     } else badge.textContent = st.file ? "no picks yet" : "no draft log";
@@ -499,19 +500,23 @@
     const d = st.draft;
     if (!d || p.pack === null || p.status === "idle") return;
     const size = d.pack_sizes[String(p.pack)];
-    if (!size || p.pick > size) return;                 // pack finished; next pack is all unseen
+    const picksInPack = size ? Math.ceil(size / (d.cards_per_pick || 1)) : 0;
+    if (!size || p.pick > picksInPack) return;          // pack finished; next pack is all unseen
     const first = p.status === "on_screen" ? p.pick + 1 : p.pick;
-    if (first > size) return;
+    if (first > picksInPack) return;
 
     const byDue = new Map(st.in_flight.map((f) => [f.due_pick, f]));
     const n = d.pod_size;
+    const cpp = d.cards_per_pick || 1;
+    const lastPick = Math.ceil(size / cpp);              // pick-two: 14 cards -> 7 picks
     let known = 0;
-    for (let j = first; j <= size; j++) {
+    for (let j = first; j <= lastPick; j++) {
       const f = byDue.get(j);
       if (!f) {
+        const left = size - (j - 1) * cpp;
         const row = el("div", "upcoming-row unseen");
         row.appendChild(el("span", "pick", `Pick ${j}`));
-        row.appendChild(el("span", "muted", `unseen · ${size + 1 - j} card${size + 1 - j === 1 ? "" : "s"}`));
+        row.appendChild(el("span", "muted", `unseen · ${left} card${left === 1 ? "" : "s"}`));
         box.appendChild(row);
         continue;
       }
@@ -519,7 +524,7 @@
       const b = el("div", "block");
       const h = el("div", "head");
       h.appendChild(el("span", "pick", `Pick ${j}`));
-      const remaining = Math.max(0, f.passed.length - (n - 1));
+      const remaining = Math.max(0, f.passed.length - (n - 1) * cpp);
       h.appendChild(el("span", "muted",
         `your ${pos(f.pack, f.first_pick)} pack · ${remaining} of these ${f.passed.length} will be left`));
       b.appendChild(h);
@@ -527,7 +532,7 @@
       box.appendChild(b);
     }
     head.hidden = false;
-    $("upcoming-count").textContent = `${known} seen · ${size - first + 1 - known} unseen`;
+    $("upcoming-count").textContent = `${known} seen · ${lastPick - first + 1 - known} unseen`;
   }
 
   // --------------------------------------------------------------- wheels
@@ -558,7 +563,8 @@
     const box = $("picks");
     clear(box);
     const done = st.picks.filter((p) => p.complete);
-    $("pick-count").textContent = done.length ? String(done.length) : "";
+    const taken = done.reduce((s, p) => s + (p.picked_all || [p.picked]).length, 0);
+    $("pick-count").textContent = done.length ? String(taken) : "";
     $("picks-empty").textContent = done.length ? "" : "No picks yet.";
     const flashNew = lastCommitted >= 0 && done.length > lastCommitted;
     lastCommitted = done.length;
@@ -571,11 +577,14 @@
       byPack.get(p.pack).push(p);
     }
     for (const [pack, picks] of byPack) {
-      box.appendChild(el("div", "group-head", `Pack ${pack} · ${picks.length}`));
+      const count = picks.reduce((s, p) => s + (p.picked_all || [p.picked]).length, 0);
+      box.appendChild(el("div", "group-head", `Pack ${pack} · ${count}`));
       const row = el("div", "tilerow");
       for (const p of picks) {
-        row.appendChild(tile(p.picked, "sm", flashNew && p.picked === newest ? "flash" : "",
-          `picked ${pos(p.pack, p.pick)}`));
+        for (const name of (p.picked_all || [p.picked])) {
+          row.appendChild(tile(name, "sm", flashNew && p.picked === newest ? "flash" : "",
+            `picked ${pos(p.pack, p.pick)}`));
+        }
       }
       box.appendChild(row);
     }

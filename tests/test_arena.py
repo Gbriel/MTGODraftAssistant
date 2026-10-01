@@ -101,6 +101,35 @@ def test_repeated_notifications_collapse_to_one_pack():
     assert picks[0].picked == 17047 and picks[0].available[0] == 7163
 
 
+PICKTWO = os.path.join(ARENA, "arena_picktwo_in_progress.log")
+
+
+def test_pick_two_draft_takes_two_cards_per_pick():
+    """PickTwoDraft: 14-card packs, two GrpIds per pick request, pick numbers still count picks."""
+    p = parse_file(PICKTWO)
+    d = p.current
+    assert d.event_name.startswith("PickTwoDraft_FRA")
+    assert d.cards_per_pick == 2
+    picks = d.ordered_picks
+    first = picks[0]
+    assert len(first.available) == 14 and first.complete
+    assert first.picked is not None and len(first.also_picked) == 1
+    assert first.picked in first.available and first.also_picked[0] in first.available
+    assert first.picked != first.also_picked[0]
+    assert d.warnings == []
+    # the second notified pack is two cards lighter than the first
+    if len(picks) > 1:
+        assert len(picks[1].available) == 12
+
+    draft = to_draft(d)
+    assert draft.cards_per_pick == 2
+    assert len(draft.picks[0].picked_all) == 2 and len(draft.pool) >= 2
+    assert set(draft.picks[0].passed) == set(draft.picks[0].available) - set(draft.picks[0].picked_all)
+    a = analyse(draft)
+    assert a.cards_per_pick == 2 and a.pack_sizes == {1: 14}
+    assert a.warnings == []
+
+
 def test_version_only_bumps_on_change():
     p = ArenaLogParser()
     text = read_bytes(LIVE).decode("utf-8")

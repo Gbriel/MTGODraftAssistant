@@ -136,6 +136,7 @@ def build_state(update: Update | None, analysis: Analysis | None,
             "pod_size": analysis.pod_size,
             "pod_size_source": analysis.pod_size_source,
             "pack_sizes": {str(k): v for k, v in analysis.pack_sizes.items()},
+            "cards_per_pick": analysis.cards_per_pick,
             "source": d.source,
         },
         "position": {
@@ -150,6 +151,7 @@ def build_state(update: Update | None, analysis: Analysis | None,
         "picks": [
             {
                 "pack": p.pack, "pick": p.pick, "picked": p.picked,
+                "picked_all": p.picked_all,
                 "available": list(p.available), "complete": p.complete,
             }
             for p in d.picks
@@ -423,11 +425,16 @@ class DraftServer:
         return f"http://{self.host}:{self.port}/"
 
     def _dataset_key(self, source: str, update: Update | None) -> tuple[str, str]:
-        """(expansion, event_type) for the draft on screen: from an Arena event name, else the default."""
+        """
+        (expansion, event_type) for the draft on screen. An Arena event names
+        the expansion; the event type is always the configured default
+        (PremierDraft), because that is where the data is: a pick-two or
+        quick draft of a set is best served by the set's premier-draft numbers.
+        """
         if source == "arena" and update is not None:
             found = dataset_for_event(update.draft.set_name)
             if found is not None:
-                return found
+                return found[0], self.pool.default[1]
         return self.pool.default
 
     def _ratings_for(self, source: str, update: Update | None):

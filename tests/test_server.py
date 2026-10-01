@@ -418,7 +418,8 @@ def test_arena_set_draft_loads_its_own_17lands_dataset(tmp_path):
 
     # the real cube fixture with its event renamed to a set draft
     text = open(ARENA_COMPLETE, "rb").read().decode("utf-8")
-    text = text.replace("CubeDraft_Powered_20260908", "PremierDraft_FRA_20260929")
+    # a pick-two event of the set must use the set's PremierDraft data, as the user asked
+    text = text.replace("CubeDraft_Powered_20260908", "PickTwoDraft_FRA_20260929")
     log = tmp_path / "Player.log"
     log.write_bytes(text.encode("utf-8"))
     client = FakeRatingsClient(rows=[row("Bristly Bill, Spine Sower", alsa=3.0, gih_wr=0.55, gih_games=800, mtga_id=90503)])
@@ -435,8 +436,9 @@ def test_arena_set_draft_loads_its_own_17lands_dataset(tmp_path):
                     and st["pool"]["cube"] is not None):
                 break
             time.sleep(0.05)
-        assert st["draft"]["set_name"] == "PremierDraft_FRA_20260929"
+        assert st["draft"]["set_name"] == "PickTwoDraft_FRA_20260929"
         assert m["expansion"] == "FRA" and m["format"] == "PremierDraft" and m["status"] == "ok"
+        assert st["draft"]["cards_per_pick"] == 1 and st["picks"][0]["picked_all"] == [st["picks"][0]["picked"]]
         assert set(m["sets"]) == {"ALL_TIME|top", "LATEST_EVENT|", "LATEST_EVENT|top"}
         assert "Bristly Bill, Spine Sower" in st["ratings"]
         assert st["pool"]["cube"]["name"].startswith("17Lands FRA")
