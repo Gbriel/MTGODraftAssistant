@@ -8,3 +8,6 @@ data/cache/
 config.toml
 .pytest_cache/
 *.egg-info/
+# design handoffs are ported into web/; the drop folder itself stays out of git
+Port from design/
+port from design/

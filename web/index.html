@@ -3,89 +3,138 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MTGO Draft Assistant</title>
+  <title>Draft Assistant</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="title">MTGO Draft Assistant</span>
-      <span id="cube" class="muted"></span>
-    </div>
-    <div id="position" class="position idle">no draft</div>
-    <div class="conn">
-      <span id="cards-pending" class="muted"></span>
-      <span id="conn-dot" class="dot"></span>
-      <span id="conn-text" class="muted">connecting</span>
-    </div>
-  </header>
+<div class="page">
 
-  <div id="players" class="players"></div>
-  <div id="taken" class="taken"></div>
-  <div id="ratings-bar" class="ratings" hidden></div>
+  <!-- status line: position, state, draft info, settings gear, connection -->
+  <div class="status-wrap">
+    <header class="status">
+      <span id="position" class="pos">—</span>
+      <span id="state" class="pill idle">idle</span>
+      <span id="cube"></span>
+      <span id="cards-pending" class="muted"></span>
+      <a id="nav-deck" href="#deck" hidden>Deck &amp; game →</a>
+      <a id="nav-draft" href="#" hidden>← Draft</a>
+      <span class="conn"><span id="conn-dot" class="dot"></span><span id="conn-text">connecting</span></span>
+      <button id="gear" class="gear" type="button" title="Settings" aria-label="Settings">⚙</button>
+    </header>
+
+    <div id="settings" class="settings" hidden>
+      <div class="grp">
+        <h3>Cards</h3>
+        <label><input type="checkbox" id="opt-badges"> Show 17Lands badges on cards (GIH WR · ALSA)</label>
+        <label id="opt-top-wrap"><input type="checkbox" id="opt-top"> Top players only <span class="state" id="opt-top-state"></span></label>
+        <label id="opt-latest-wrap"><input type="checkbox" id="opt-latest"> Latest event only <span class="state" id="opt-latest-state"></span></label>
+        <div id="ratings-bar" class="ds"></div>
+      </div>
+      <div class="grp">
+        <h3>Wheel tally</h3>
+        <label><input type="checkbox" id="opt-multi"> Count multicolour cards</label>
+        <label><input type="checkbox" id="opt-lands"> Count lands</label>
+      </div>
+      <div class="grp" id="logdir-grp">
+        <h3>MTGO draft log folder</h3>
+        <form id="logdir-form" class="logdir-row">
+          <input id="logdir-input" type="text" spellcheck="false" placeholder="C:\Users\you\MTGODraftLogs" autocomplete="off">
+          <button type="submit">Save</button>
+        </form>
+        <div id="logdir-msg" class="logdir-msg"></div>
+        <div class="ds">In MTGO, open Settings, tick <em>Save Draft Log</em>, and paste the folder path shown there.</div>
+      </div>
+      <div class="grp">
+        <h3>Watching</h3>
+        <div id="file" class="ds"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="warnings" class="warnings" hidden></div>
 
-  <form id="logdir-form" class="logdir" hidden>
-    <div class="logdir-text">
-      <strong>MTGO draft log folder.</strong>
-      In MTGO, open Settings, tick <em>Save Draft Log</em>, and paste the folder path shown there.
-    </div>
-    <div class="logdir-row">
-      <input id="logdir-input" type="text" spellcheck="false" placeholder="C:\Users\you\MTGODraftLogs" autocomplete="off">
-      <button type="submit">Save</button>
-      <button type="button" id="logdir-cancel">Cancel</button>
-    </div>
-    <div id="logdir-msg" class="logdir-msg"></div>
-  </form>
+  <!-- ====================== draft view ====================== -->
+  <div id="view-draft" class="view">
 
-  <main class="grid">
-    <section class="pane pane-wide" id="pane-current">
-      <h2>On screen now <span id="current-count" class="count"></span></h2>
-      <div id="current-cards" class="tiles"></div>
-      <div id="current-wheel" class="wheel-note" hidden></div>
-      <p id="current-empty" class="empty"></p>
+    <div class="two-col">
+      <section class="sec" id="pane-current">
+        <div class="sec-head">
+          <h2>In front of you</h2>
+          <span id="current-count" class="note"></span>
+        </div>
+        <div id="current-cards" class="tiles"></div>
+        <p id="current-empty" class="empty"></p>
+        <div id="current-wheel" class="prose" hidden></div>
+      </section>
 
-      <h2 class="spaced" id="upcoming-head" hidden>Coming up <span id="upcoming-count" class="count"></span></h2>
-      <div id="upcoming"></div>
+      <section class="sec" id="pane-pod">
+        <div class="sec-head">
+          <h2>Where the packs are</h2>
+          <span id="pod-note" class="hint"></span>
+        </div>
+        <div id="pod" class="pod"></div>
+      </section>
+    </div>
+
+    <section class="sec" id="pane-picks">
+      <div class="sec-head">
+        <button class="toggle" id="picks-toggle" type="button"><h2>Your picks</h2>
+          <span id="pick-count" class="note"></span><span class="hint" id="picks-hint">expand</span></button>
+      </div>
+      <div id="picks" hidden></div>
     </section>
 
-    <section class="pane" id="pane-flow">
-      <h2>Wheels <span id="wheel-count" class="count"></span>
-        <span class="legend"><i class="sw mine"></i>your pick <i class="sw gone"></i>taken by the pod <i class="sw back"></i>came back</span>
-      </h2>
+    <section class="sec" id="pane-wheels">
+      <div class="sec-head">
+        <h2>Already wheeled</h2>
+        <span class="hint">Left of the line: came back. Right: the pod took it.</span>
+        <button class="link right" id="older-toggle" type="button" hidden></button>
+      </div>
+      <div id="taken" class="hint"></div>
       <div id="wheels"></div>
       <p id="wheels-empty" class="empty">No pack has come back around yet.</p>
     </section>
 
-  </main>
+    <footer class="foot">
+      <div class="line" id="pane-pool">
+        <input id="pool-search" type="search" placeholder="find a card…" spellcheck="false" autocomplete="off">
+        <span id="pool-summary"></span>
+      </div>
+      <div id="pool"></div>
+      <div class="line ratings">
+        <span id="ratings-short"></span>
+        <span class="key right">badge = GIH win rate · ALSA <i class="r-hot">top</i><i class="r-mid">next</i><i>rest</i></span>
+      </div>
+      <div class="line small"><span id="file-short"></span><span id="updated"></span></div>
+    </footer>
+  </div>
 
-  <section class="pane pool" id="pane-pool" hidden>
-    <h2>Find a card
-      <input id="pool-search" type="search" placeholder="type a card name…" spellcheck="false" autocomplete="off">
-      <span id="pool-summary" class="count"></span>
-    </h2>
-    <div id="pool"></div>
-  </section>
+  <!-- ====================== deck / game view ====================== -->
+  <div id="view-deck" class="view" hidden>
+    <section class="sec">
+      <div class="sec-head">
+        <div class="tabs"><button id="tab-deck" type="button" class="on">Decklist</button><button id="tab-lib" type="button">Still in library</button></div>
+        <span id="deck-note" class="note"></span>
+      </div>
+      <p id="deck-empty" class="empty"></p>
+      <div id="deck-curve" class="curve"></div>
+      <div id="deck-unexpected" class="unexpected" hidden></div>
+      <div id="deck-side" class="sideline"></div>
+    </section>
+    <section class="sec" id="pane-opp">
+      <div class="sec-head">
+        <h2 id="opp-title">Opponent has shown</h2>
+        <span id="opp-note" class="note"></span>
+      </div>
+      <div id="opp-cards" class="tiles"></div>
+    </section>
+    <footer class="foot">
+      <div class="line small"><span id="deck-foot"></span><span id="updated-2"></span></div>
+    </footer>
+  </div>
+</div>
 
-  <details class="pane picks deck" id="pane-deck" hidden>
-    <summary><h2>Deck <span id="deck-count" class="count"></span><span class="hint">click to expand</span></h2></summary>
-    <div id="game" class="game" hidden></div>
-    <div id="deck"></div>
-  </details>
-
-  <details class="pane picks" id="pane-picks">
-    <summary><h2>Your picks <span id="pick-count" class="count"></span><span class="hint">click to expand</span></h2></summary>
-    <div id="picks"></div>
-    <p id="picks-empty" class="empty">No picks yet.</p>
-  </details>
-
-  <footer class="foot muted">
-    <span><span id="file"></span> <a href="#" id="logdir-change">change folder</a></span>
-    <span id="updated"></span>
-  </footer>
-
-  <img id="preview" class="preview" alt="" hidden>
-
-  <script src="/static/app.js"></script>
+<div id="preview" class="popover" hidden></div>
+<script src="/static/app.js"></script>
 </body>
 </html>

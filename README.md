@@ -20,6 +20,13 @@ shows, in a browser tab:
 It never writes to, injects into, or automates the MTGO client. It only reads a
 text file MTGO already wrote.
 
+The page has one status line at the top (position, state, cube or set,
+connection) with a gear for settings: the 17Lands toggles, the wheel tally
+options and the MTGO log folder. The draft view shows the pack in front of you,
+a diagram of where every pack in the pod is (hover a seat to see that pack),
+your picks, and the packs that have wheeled. During an Arena draft a
+**Deck & game** link switches to the decklist and library tracker.
+
 ## Setup
 
 You need **Python 3.11 or newer** ([python.org](https://www.python.org/downloads/);
