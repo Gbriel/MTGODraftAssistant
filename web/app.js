@@ -253,7 +253,9 @@
     bar.appendChild(el("span", "lbl", "17Lands"));
     bar.appendChild(el("span", "ds", `${meta.expansion} · ${meta.format}`));
     if (meta.status === "ok") {
-      const when = shown.age_hours === null ? "" : (shown.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(shown.age_hours)}h ago`);
+      const nextIn = shown.next_check_hours;
+      const next = nextIn === null || nextIn === undefined ? "" : (nextIn < 0.1 ? " · checking soon" : ` · next check in ${nextIn < 1 ? Math.round(nextIn * 60) + "m" : Math.round(nextIn) + "h"}`);
+      const when = shown.age_hours === null ? "" : (shown.age_hours < 1 ? "fetched just now" : `fetched ${Math.round(shown.age_hours)}h ago`) + next;
       bar.appendChild(el("span", "muted",
         `${setLabel()} · ${fmtInt(shown.cards)} cards · ${fmtInt(shown.with_win_rate)} with a win rate (≥${fmtInt(meta.min_games)} games)${when ? " · " + when : ""}`));
       const seen = Object.keys(st.ratings || {}).length + (st.ratings_unmatched || []).length;

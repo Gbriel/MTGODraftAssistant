@@ -19,5 +19,8 @@ expansion = "Cube - Powered"   # "Cube" is the unpowered Arena cube
 format = "PremierDraft"        # 17Lands "event type"; TradDraft also has cube data
 time_period = "ALL_TIME"       # the default view; the page can switch to LATEST_EVENT
 # All-players and top-players numbers are fetched for both periods; the page has toggles.
-refresh_hours = 24             # re-download at most this often
+# 17Lands regenerates its stats once a day from 00:00 UTC (it takes a few hours).
+# The tool re-pulls when a new UTC day starts and, if the numbers came back
+# unchanged, tries again every refresh_hours (a few times at most) until they do.
+refresh_hours = 3
 min_games = 500                # hide a win rate below this many games in hand

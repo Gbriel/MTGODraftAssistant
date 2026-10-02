@@ -105,8 +105,14 @@ in: a set draft such as `PremierDraft_FRA_20260929` loads that set, a cube
 draft loads `Cube - Powered`. There is no MTGO data, but the Arena powered cube
 overlaps the MTGO Vintage Cube heavily, so MTGO drafts use the `[ratings]`
 expansion from `config.toml`, `Cube - Powered` by default. Each dataset is
-downloaded once a day (about 650KB, cached in `data/cache/`) and joined by card
-name. The numbers are the same ones the 17Lands Card Data page shows.
+about 650KB, cached in `data/cache/`, and joined by card name. The numbers are
+the same ones the 17Lands Card Data page shows.
+
+17Lands regenerates its stats once a day, starting at 00:00 UTC and taking a
+few hours. The tool re-downloads when a new UTC day begins and, if the numbers
+come back unchanged because the generation hasn't finished, tries again every
+three hours until they do, so you get each day's update within a few hours of
+it appearing on the site. The 17Lands line says when the next check is due.
 
 Each card gets a small badge: its **GIH WR** (games-in-hand win rate: how often
 decks won when they had the card in hand at some point), then its **ALSA**

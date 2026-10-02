@@ -85,6 +85,10 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   group) and creates them on demand: an Arena draft's event name picks its
   dataset (`ratings.dataset_for_event`: `PremierDraft_FRA_...` → FRA), MTGO
   drafts use the configured default. Don't pin a single expansion again.
+  **Refresh schedule** (17Lands FAQ): stats regenerate once a day from
+  00:00 UTC, taking a few hours. A dataset is stale once a new UTC day
+  starts; an unchanged pull is retried every `refresh_hours` (3) up to
+  `MAX_ATTEMPTS_PER_DAY`. Don't replace this with a plain interval.
   `--no-ratings` or a `[ratings]` table in `config.toml` controls it. The
   response carries a 17Lands usage notice; it is surfaced in the README and
   is the user's call.

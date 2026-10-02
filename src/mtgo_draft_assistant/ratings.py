@@ -18,8 +18,17 @@ Per card: ``ever_drawn_win_rate`` (GIH WR, the headline), ``win_rate``
 rates are null when 17Lands judges the sample too small; the count fields
 are always populated, and the UI always shows the count next to the rate.
 
-Etiquette: one request, serialised, with a User-Agent, backoff on failure,
-cached in SQLite, refreshed at most once per ``refresh_hours``.
+Refresh schedule (17Lands FAQ, read 2026-10-02): the card performance stats
+are generated **once per day, starting at 00:00 UTC, taking a few hours**,
+and never more than once a day. So a dataset is stale when it was fetched
+before the current UTC day began. Because the generation takes a while, a
+pull made early in the UTC day may still return yesterday's numbers; when a
+pull comes back byte-identical to what we had, we try again after
+``refresh_hours`` (3 by default), up to ``MAX_ATTEMPTS_PER_DAY`` times. Once
+the data changes we are done until the next UTC day.
+
+Etiquette: one request at a time, with a User-Agent, backoff on failure,
+cached in SQLite.
 """
 
 from __future__ import annotations
@@ -33,9 +42,10 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+import hashlib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 USER_AGENT = "MTGODraftAssistant/0.1 (local read-only draft tracker)"
@@ -45,7 +55,8 @@ DEFAULT_EXPANSION = "Cube - Powered"    # the powered/Vintage cube; plain "Cube"
 DEFAULT_FORMAT = "PremierDraft"         # sent as event_type
 DEFAULT_TIME_PERIOD = "ALL_TIME"        # every run of the cube; LATEST_EVENT etc. also exist
 DEFAULT_USER_GROUP = ""                 # all players; "top" | "middle" | "bottom" as on the site
-DEFAULT_REFRESH_HOURS = 24.0
+DEFAULT_REFRESH_HOURS = 3.0             # retry gap while waiting for the day's generation to land
+MAX_ATTEMPTS_PER_DAY = 5                # a dead format never changes; don't poll it forever
 DEFAULT_MIN_GAMES = 500                 # hide a win rate below this many GIH games
 RETRY_AFTER_FAILURE = 60.0              # seconds before another attempt after an error
 
@@ -204,6 +215,24 @@ def _percentiles(values: list[tuple[str, float]], higher_is_better: bool) -> dic
     return out
 
 
+def content_hash(rows: list[dict]) -> str:
+    """Fingerprint of a pull, to tell a real daily update from a repeat."""
+    return hashlib.sha1(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def as_utc(stamp: str | None) -> datetime | None:
+    """A stored fetched_at (naive = local time, or with an offset) as an aware UTC datetime."""
+    if not stamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(stamp.split(" (")[0])
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc)
+
+
 class Dataset:
     """One expansion+format pull, indexed for name lookup."""
 
@@ -213,6 +242,8 @@ class Dataset:
         self.format = fmt
         self.fetched_at = fetched_at
         self.min_games = min_games
+        rows = list(rows)
+        self.hash = content_hash(rows)
         base = [rating_from_17lands(r) for r in rows]
         base = [r for r in base if r.name]
         alsa_pct = _percentiles([(r.name, r.alsa) for r in base if r.alsa is not None],
@@ -407,6 +438,11 @@ class RatingsProvider:
         self._last_attempt: float | None = None       # monotonic
         self._force = False
         self.error: str | None = None
+        # the daily-update dance: did the latest pull bring new numbers, and how
+        # many pulls have we made in the current UTC day
+        self._unchanged = False
+        self._attempt_day: str | None = None
+        self._attempts_today = 0
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
@@ -446,26 +482,66 @@ class RatingsProvider:
         with self._lock:
             self._dataset = ds
 
+    def _now_utc(self) -> datetime:
+        now = self._now()
+        return now.astimezone(timezone.utc) if now.tzinfo else now.astimezone().astimezone(timezone.utc)
+
     def _age_hours(self, ds: Dataset | None) -> float | None:
-        if ds is None or not ds.fetched_at:
+        if ds is None:
             return None
-        try:
-            then = datetime.fromisoformat(ds.fetched_at)
-        except ValueError:
+        then = as_utc(ds.fetched_at)
+        if then is None:
             return None
-        return (self._now() - then).total_seconds() / 3600.0
+        return (self._now_utc() - then).total_seconds() / 3600.0
 
     def is_stale(self) -> bool:
-        age = self._age_hours(self.dataset)
-        return age is None or age >= self.refresh_hours
+        """
+        Stale when fetched before the current UTC day began (17Lands regenerates
+        once a day from 00:00 UTC), or when today's pull came back unchanged
+        and ``refresh_hours`` have passed since, up to a few tries a day.
+        """
+        ds = self.dataset
+        fetched = as_utc(ds.fetched_at) if ds else None
+        if fetched is None:
+            return True
+        now = self._now_utc()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if fetched < day_start:
+            return True
+        with self._lock:
+            unchanged, attempts = self._unchanged, self._attempts_today
+        if not unchanged or attempts >= MAX_ATTEMPTS_PER_DAY:
+            return False
+        return (now - fetched).total_seconds() >= self.refresh_hours * 3600.0
+
+    def next_check_hours(self) -> float | None:
+        """Roughly when the next pull is due, in hours; None if nothing is scheduled."""
+        ds = self.dataset
+        fetched = as_utc(ds.fetched_at) if ds else None
+        if fetched is None:
+            return 0.0
+        now = self._now_utc()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        with self._lock:
+            unchanged, attempts = self._unchanged, self._attempts_today
+        if fetched < day_start:
+            return 0.0
+        if unchanged and attempts < MAX_ATTEMPTS_PER_DAY:
+            due = fetched.timestamp() + self.refresh_hours * 3600.0 - now.timestamp()
+            return max(0.0, round(due / 3600.0, 2))
+        next_day = day_start.timestamp() + 86400.0
+        return round(max(0.0, next_day - now.timestamp()) / 3600.0, 2)
 
     def _due(self) -> bool:
         with self._lock:
             force = self._force
             last = self._last_attempt
+            failed = self.error is not None
         if not force and not self.is_stale():
             return False
-        return last is None or time.monotonic() - last >= RETRY_AFTER_FAILURE
+        if failed and last is not None and time.monotonic() - last < RETRY_AFTER_FAILURE:
+            return False                     # back off after an error, not after a success
+        return True
 
     # -- queries
     def lookup(self, names: Iterable[str]) -> tuple[dict[str, CardRating], list[str]]:
@@ -513,6 +589,8 @@ class RatingsProvider:
             "min_games": self.min_games,
             "error": error,
             "retry_in": retry_in,          # seconds until the next attempt after a failure
+            "next_check_hours": self.next_check_hours() if ds is not None else 0.0,
+            "unchanged_today": self._unchanged,
         }
 
     # -- worker
@@ -531,13 +609,20 @@ class RatingsProvider:
         self._notify()
         try:
             rows = self.client.fetch(self.expansion, self.format, self.time_period, self.user_group)
-            fetched_at = self._now().isoformat(timespec="seconds")
+            now = self._now()
+            fetched_at = (now if now.tzinfo else now.astimezone()).isoformat(timespec="seconds")
             ds = Dataset(rows, self.expansion, self.format, fetched_at, self.min_games)
             if len(ds) == 0:
                 raise ValueError(f"17Lands returned no cards for {self.expansion!r}/{self.format!r}")
             self.cache.put(self.expansion, self.format, rows, fetched_at, self.time_period,
                            self.user_group)
+            day = self._now_utc().date().isoformat()
             with self._lock:
+                previous = self._dataset
+                self._unchanged = previous is not None and previous.hash == ds.hash
+                if self._attempt_day != day:
+                    self._attempt_day, self._attempts_today = day, 0
+                self._attempts_today += 1
                 self._dataset = ds
                 self.error = None
         except Exception as e:  # network, HTTP, JSON, empty: all recorded, all retried later

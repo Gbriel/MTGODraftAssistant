@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
@@ -183,7 +183,7 @@ def test_provider_fetches_when_no_cache(tmp_path):
     client = FakeClient()
     changes = []
     p = RatingsProvider(tmp_path, client=client, on_change=lambda: changes.append(1),
-                        now=lambda: datetime(2026, 9, 24, 12, 0, 0))
+                        now=lambda: datetime(2026, 9, 24, 12, 0, 0, tzinfo=timezone.utc))
     assert p.status()["status"] == "empty"
     assert p.lookup(["Black Lotus"]) == ({}, ["Black Lotus"])
     p.start()
@@ -191,7 +191,7 @@ def test_provider_fetches_when_no_cache(tmp_path):
         assert wait_until(lambda: p.status()["status"] == "ok")
         st = p.status()
         assert st["cards"] == 8 and st["with_win_rate"] == 2 and st["error"] is None
-        assert st["fetched_at"] == "2026-09-24T12:00:00" and st["age_hours"] == 0.0
+        assert st["fetched_at"] == "2026-09-24T12:00:00+00:00" and st["age_hours"] == 0.0
         found, missing = p.lookup(["Black Lotus", "Sol Ring"])
         assert found["Black Lotus"].gih_wr == 0.66 and missing == ["Sol Ring"]
         assert changes
@@ -201,13 +201,15 @@ def test_provider_fetches_when_no_cache(tmp_path):
 
 
 def test_fresh_cache_is_used_without_network(tmp_path):
-    now = datetime(2026, 9, 24, 12, 0, 0)
+    # fetched at 09:00 UTC today, now 12:00 UTC: same UTC day, nothing to do
+    now = datetime(2026, 9, 24, 12, 0, 0, tzinfo=timezone.utc)
     RatingsCache(tmp_path / "ratings.sqlite").put(
         "Cube - Powered", "PremierDraft", ROWS, (now - timedelta(hours=3)).isoformat(timespec="seconds"))
     client = FakeClient()
     p = RatingsProvider(tmp_path, client=client, now=lambda: now)
     assert p.status()["status"] == "ok" and p.status()["age_hours"] == 3.0
     assert not p.is_stale()
+    assert 11.9 < p.status()["next_check_hours"] <= 12.0          # the next UTC day
     p.start()
     time.sleep(0.2)
     p.stop()
@@ -215,25 +217,67 @@ def test_fresh_cache_is_used_without_network(tmp_path):
 
 
 def test_stale_cache_is_served_then_refreshed(tmp_path):
-    now = datetime(2026, 9, 24, 12, 0, 0)
+    # fetched yesterday (UTC): 17Lands has regenerated since, so pull again
+    now = datetime(2026, 9, 24, 12, 0, 0, tzinfo=timezone.utc)
     old = [row("Black Lotus", alsa=2.0)]
     RatingsCache(tmp_path / "ratings.sqlite").put(
-        "Cube - Powered", "PremierDraft", old, (now - timedelta(hours=30)).isoformat(timespec="seconds"))
+        "Cube - Powered", "PremierDraft", old, (now - timedelta(hours=13)).isoformat(timespec="seconds"))
     client = FakeClient()
     p = RatingsProvider(tmp_path, client=client, now=lambda: now)
-    assert p.is_stale()
+    assert p.is_stale() and p.status()["next_check_hours"] == 0.0
     assert p.lookup(["Black Lotus"])[0]["Black Lotus"].alsa == 2.0     # old data, immediately
     p.start()
     try:
         assert wait_until(lambda: p.status()["cards"] == 8)
         assert p.lookup(["Black Lotus"])[0]["Black Lotus"].alsa == 1.2
         assert p.status()["age_hours"] == 0.0
+        assert p.status()["unchanged_today"] is False and not p.is_stale()
     finally:
         p.stop()
     assert len(client.calls) == 1
     # and the refreshed pull is on disk for next time
     rows, _ = RatingsCache(tmp_path / "ratings.sqlite").get("Cube - Powered", "PremierDraft")
     assert len(rows) == 8
+
+
+def test_unchanged_pull_is_retried_a_few_hours_later_then_given_up(tmp_path):
+    """Early in the UTC day the daily generation may not be done: the pull repeats
+    yesterday's numbers. Try again after refresh_hours, a few times at most."""
+    from mtgo_draft_assistant.ratings import MAX_ATTEMPTS_PER_DAY
+    clock = {"now": datetime(2026, 9, 24, 0, 30, 0, tzinfo=timezone.utc)}
+    RatingsCache(tmp_path / "ratings.sqlite").put(
+        "Cube - Powered", "PremierDraft", ROWS, (clock["now"] - timedelta(hours=6)).isoformat(timespec="seconds"))
+    client = FakeClient()                               # returns the same ROWS: "unchanged"
+    p = RatingsProvider(tmp_path, client=client, now=lambda: clock["now"], refresh_hours=3)
+    p.POLL_SECONDS = 0.02
+    assert p.is_stale()                                 # fetched before today's 00:00 UTC
+    p.start()
+    try:
+        assert wait_until(lambda: len(client.calls) == 1)
+        assert wait_until(lambda: p.status()["unchanged_today"] is True)
+        assert not p.is_stale() and 2.9 < p.status()["next_check_hours"] <= 3.0
+        clock["now"] += timedelta(hours=3, minutes=1)
+        assert wait_until(lambda: len(client.calls) == 2)
+        # still unchanged: keep trying every refresh_hours until the daily cap
+        for _ in range(MAX_ATTEMPTS_PER_DAY - 2):
+            clock["now"] += timedelta(hours=3, minutes=1)
+            n = len(client.calls)
+            assert wait_until(lambda: len(client.calls) == n + 1)
+        clock["now"] += timedelta(hours=3, minutes=1)
+        time.sleep(0.2)
+        assert len(client.calls) == MAX_ATTEMPTS_PER_DAY, "capped for the day"
+        assert not p.is_stale()
+        # a new UTC day: pull again, and this time the numbers changed -> done for the day
+        client.rows = ROWS + [row("New Card", alsa=4.0)]
+        clock["now"] = datetime(2026, 9, 25, 0, 10, 0, tzinfo=timezone.utc)
+        assert wait_until(lambda: len(client.calls) == MAX_ATTEMPTS_PER_DAY + 1)
+        assert wait_until(lambda: p.status()["cards"] == 9)
+        assert p.status()["unchanged_today"] is False and not p.is_stale()
+        clock["now"] += timedelta(hours=6)
+        time.sleep(0.2)
+        assert len(client.calls) == MAX_ATTEMPTS_PER_DAY + 1
+    finally:
+        p.stop()
 
 
 def test_failure_is_reported_and_not_retried_immediately(tmp_path):
