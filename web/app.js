@@ -473,7 +473,10 @@
     empty.textContent = "";
     $("current-count").textContent = `${cur.cards.length} cards · ${pos(cur.pack, cur.pick)}`;
 
-    // If this pack wheeled, say what the pod took out of it.
+    for (const c of cur.cards) list.appendChild(tile(c, "sm"));
+
+    // If this pack wheeled, say what the pod took out of it: below the cards
+    // that came back, so what you can still take sits on top.
     const wheel = st.wheels.find((w) => w.pack === cur.pack && w.return_pick === cur.pick);
     if (wheel) {
       note.hidden = false;
@@ -484,8 +487,6 @@
       note.appendChild(packRow(wheel.your_pick,
         wheel.taken.map((n) => tile(n, "sm", "gone", "taken by the pod"))));
     }
-
-    for (const c of cur.cards) list.appendChild(tile(c, "sm"));
   }
 
   // ------------------------------------------------------------- upcoming
@@ -549,12 +550,15 @@
       const head = el("div", "head");
       head.appendChild(el("span", "pos", `${pos(w.pack, w.first_pick)} → ${pos(w.pack, w.return_pick)}`));
       b.appendChild(head);
-      // one wrapping row: your pick (gold), then the pack you passed in its
-      // original order, with a red X over every card that did not come back
+      // one wrapping row: your pick (gold), then the cards that came back
+      // first, then the ones the pod took (red X), so what wheeled sits above
       const back = new Set(w.returned);
-      b.appendChild(packRow(w.your_pick, w.passed.map((n) => back.has(n)
-        ? tile(n, "sm", "back", "came back to you")
-        : tile(n, "sm", "gone", "taken by the pod"))));
+      const cameBack = w.passed.filter((n) => back.has(n));
+      const taken = w.passed.filter((n) => !back.has(n));
+      b.appendChild(packRow(w.your_pick, [
+        ...cameBack.map((n) => tile(n, "sm", "back", "came back to you")),
+        ...taken.map((n) => tile(n, "sm", "gone", "taken by the pod")),
+      ]));
       if (w.warning) b.appendChild(el("div", "warn", w.warning));
       box.appendChild(b);
     }

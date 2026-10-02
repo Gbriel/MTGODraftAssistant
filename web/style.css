@@ -487,10 +487,10 @@ details.picks[open] .hint { display: none; }
 
 .wheel-note {
   border: 1px solid var(--line);
-  border-left: 3px solid var(--back);
+  border-left: 3px solid var(--gone);
   border-radius: 6px;
   padding: 8px 10px;
-  margin-bottom: 10px;
+  margin-top: 10px;
   background: var(--pane-2);
   font-size: 13px;
 }
