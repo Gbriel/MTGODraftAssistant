@@ -350,17 +350,20 @@
   $("tab-deck").addEventListener("click", () => { prefs.deckMode = "deck"; savePrefs(); renderDeck(lastState); });
   $("tab-lib").addEventListener("click", () => { prefs.deckMode = "lib"; savePrefs(); renderDeck(lastState); });
   const sum = (list) => list.reduce((s, c) => s + c.n, 0);
+  // A card in the curve. With an image, nothing is drawn over it: the stack
+  // shows each card's own printed title band, and duplicates are stacked as
+  // separate copies. Without an image, a text cell carries name, cost and count.
   function cardFace(name, count, zone, showMana) {
     const i = info(name), hasImg = !!(i && i.image);
     const c = el("div", "card" + (hasImg ? " has-img" : "")); c.dataset.card = name;
     const face = el("div", "face" + (hasImg ? "" : " g-" + group(name)));
-    if (hasImg) { const img = el("img"); img.src = i.image; img.alt = name; img.loading = "lazy"; face.appendChild(img); }
+    if (hasImg) { const img = el("img"); img.src = i.image; img.alt = name; img.loading = "lazy"; face.appendChild(img); c.appendChild(face); return c; }
     const bar = el("div", "bar"); bar.appendChild(el("span", "n", name));
     if (zone) bar.appendChild(el("span", "z", zone));
     if (showMana && i && i.group !== "L" && i.mana_cost) bar.appendChild(el("span", "m", mana(i)));
     if (count > 1) bar.appendChild(el("span", "x", `×${count}`));
     face.appendChild(bar);
-    if (!hasImg) face.appendChild(el("div", "body", i ? i.type_line : ""));
+    face.appendChild(el("div", "body", i ? i.type_line : ""));
     c.appendChild(face);
     return c;
   }
@@ -400,7 +403,10 @@
         for (const c of cols.get(k).slice().sort((a, b) => a.name.localeCompare(b.name))) {
           const out = left.get(c.name) || 0, remain = c.n - out;
           if (lib && remain <= 0) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", out > 1 ? `${out} out` : "out")); gone.appendChild(gc); continue; }
-          stack.appendChild(cardFace(c.name, lib ? remain : c.n, lib && out ? `${out} out` : null, !(lib && out)));
+          const shown = lib ? remain : c.n, i = info(c.name);
+          if (i && i.image) { for (let k2 = 0; k2 < shown; k2++) stack.appendChild(cardFace(c.name, 1, null, false)); }
+          else stack.appendChild(cardFace(c.name, shown, lib && out ? `${out} out` : null, !(lib && out)));
+          if (lib && out && i && i.image) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", `${out} of ${c.n} out`)); gone.appendChild(gc); }
         }
         col.appendChild(stack); if (gone.childNodes.length) col.appendChild(gone); curve.appendChild(col);
       }
