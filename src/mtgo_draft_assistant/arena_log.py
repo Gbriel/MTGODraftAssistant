@@ -311,6 +311,7 @@ class ArenaWatcher:
         self._seen_game_version = -1
         self._seen_draft: str | None = None
         self.current: Update | None = None
+        self._seed_from_previous()
 
     def set_log_dir(self, log_dir: str | os.PathLike[str] | None) -> None:
         """Kept for interface parity; Arena has one fixed file."""
@@ -329,6 +330,30 @@ class ArenaWatcher:
         self._seen_version = -1
         self._seen_game_version = -1
         self._seen_draft = None
+        self._seed_from_previous()
+
+    PREVIOUS_NAME = "Player-prev.log"
+
+    def _seed_from_previous(self) -> None:
+        """
+        Arena rewrites Player.log on every launch and keeps the old one as
+        Player-prev.log. Read that first, so the last draft and the deck you
+        submitted survive a relaunch. Anything in the live log supersedes it
+        (a newer draft becomes current). A match left "playing" in the old
+        log is over by definition, so it is dropped.
+        """
+        prev = self.log_path.with_name(self.PREVIOUS_NAME)
+        try:
+            with open(prev, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            return
+        for raw in data.split(b"\n"):
+            line = raw.decode("utf-8", errors="replace").rstrip("\r")
+            self._parser.feed_line(line)
+            self._games.feed_line(line)
+        self._games.match = None
+        self._seen_version = -1          # the seeded draft counts as new on the first poll
 
     TAIL_CHECK = 256
 
@@ -352,10 +377,16 @@ class ArenaWatcher:
         try:
             st = self.log_path.stat()
         except OSError:
+            # no live log, but a previous one may have been seeded
+            if self._offset == 0 and self._seen_version != self._parser.version:
+                return self._emit(FileStamp(path=self.log_path, size=0, mtime_ns=0))
             return None
         if st.st_size < self._offset:
             self._reset()                        # rewritten: new client launch
         if st.st_size == self._offset:
+            # nothing new in the live log; the seeded previous log may still be unreported
+            if self._seen_version != self._parser.version or self._seen_game_version != self._games.version:
+                return self._emit(FileStamp(path=self.log_path, size=st.st_size, mtime_ns=st.st_mtime_ns))
             return None
         try:
             with open(self.log_path, "rb") as fh:

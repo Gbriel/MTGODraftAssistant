@@ -242,6 +242,40 @@ def test_watcher_rebuild_applies_new_names(tmp_path):
     assert r.draft.picks[0].picked == "Bristly Bill, Spine Sower"
 
 
+def test_watcher_seeds_from_the_previous_log_after_a_relaunch(tmp_path):
+    """Arena rewrites Player.log on launch and keeps the old one as Player-prev.log:
+    the last draft (and deck) must still show, until the live log has a newer draft."""
+    from test_arena_game import deck_line, UNSEEN_IDS
+
+    prev = tmp_path / "Player-prev.log"
+    live = tmp_path / "Player.log"
+    prev.write_bytes(read_bytes(COMPLETE) + b"[UnityCrossThreadLogger]9/24/2026 10:20:00 AM\r\n"
+                     + (deck_line([(g, 1) for g in UNSEEN_IDS], []) + "\r\n").encode("utf-8"))
+    live.write_bytes(b"Mono path[0] = 'C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data/Managed'\r\n")
+    w = ArenaWatcher(live, namer=lambda g: None)
+    u = w.poll()
+    assert u is not None and u.new_draft
+    assert u.draft.event_id == "6691070a-0afe-45b2-85c2-fbd4ae2ebf2b" and len(u.draft.picks) == 45
+    assert w.deck() is not None and w.deck().main_count == len(UNSEEN_IDS)
+    assert w.game() is None, "a match left open in the old log is not live"
+    assert w.poll() is None
+
+    # a new draft in the live log takes over
+    with open(live, "ab") as fh:
+        fh.write(read_bytes(LIVE))
+    u = w.poll()
+    assert u is not None and u.new_draft and u.draft.event_id.startswith("913a5497")
+
+    # no live log at all: the previous one still counts
+    w2 = ArenaWatcher(tmp_path / "missing" / "Player.log")
+    assert w2.poll() is None
+    (tmp_path / "only_prev").mkdir()
+    (tmp_path / "only_prev" / "Player-prev.log").write_bytes(read_bytes(COMPLETE))
+    w3 = ArenaWatcher(tmp_path / "only_prev" / "Player.log")
+    u = w3.poll()
+    assert u is not None and len(u.draft.picks) == 45
+
+
 def test_watcher_missing_file_is_quiet(tmp_path):
     w = ArenaWatcher(tmp_path / "nope" / "Player.log")
     assert w.poll() is None
