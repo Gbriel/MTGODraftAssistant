@@ -216,26 +216,31 @@
   }
 
   // ------------------------------------------------------------ pod circle
-  // You at the bottom. Packs 1 and 3 pass left, so the pack due next comes
-  // from your right; pack 2 the other way round.
+  // You at the bottom; the seats are fixed physical positions numbered
+  // clockwise from you (seat 2 is on your left), the same all draft long.
+  // Packs 1 and 3 pass left, so a pack reaches you from your right; pack 2
+  // passes right. Only the packs move between rounds, not the people.
   function renderPod(st) {
     const box = $("pod"); clear(box);
     const d = st.draft, p = st.position;
     $("pane-pod").hidden = !d || p.status === "idle";
     if ($("pane-pod").hidden) return;
     const n = d.pod_size || 8, cpp = d.cards_per_pick || 1, size = d.pack_sizes[String(p.pack)] || 15, lastPick = Math.ceil(size / cpp);
-    const dir = p.pack === 2 ? 1 : -1;
-    $("pod-note").textContent = `${dir === -1 ? "packs pass left" : "packs pass right"} · hover a pack to see it`;
+    const passLeft = p.pack !== 2;
+    $("pod-note").textContent = `${passLeft ? "packs pass left" : "packs pass right"} · hover a pack to see it`;
     box.appendChild(el("div", "ring"));
-    const c = el("div", "centre", dir === -1 ? "↻" : "↺"); c.appendChild(el("small", null, dir === -1 ? "packs pass left" : "packs pass right")); box.appendChild(c);
+    const c = el("div", "centre", passLeft ? "↻" : "↺"); c.appendChild(el("small", null, passLeft ? "packs pass left" : "packs pass right")); box.appendChild(c);
     const heroIdx = d.players.indexOf(d.hero);
     const byU = new Map(st.in_flight.map((f) => [f.picks_until_return, f]));
-    for (let u = 0; u < n; u++) {
-      const ang = Math.PI / 2 + dir * u * 2 * Math.PI / n;
-      const s = el("div", "seat" + (u === 0 ? " hero" : ""));
-      s.style.left = (210 + 150 * Math.cos(ang)) + "px"; s.style.top = (170 + 125 * Math.sin(ang)) + "px";
-      const pi = heroIdx >= 0 ? ((heroIdx + dir * u) % n + n) % n : -1;
-      s.appendChild(el("div", "who", u === 0 ? "you" : (pi >= 0 && d.players[pi]) || `seat ${u + 1}`));
+    for (let s = 0; s < n; s++) {
+      // physical seat s, going clockwise from you (left on screen first)
+      const ang = Math.PI / 2 + s * 2 * Math.PI / n;
+      // the pack at this seat reaches you in u picks: counting against the passing direction
+      const u = passLeft ? (n - s) % n : s;
+      const seat = el("div", "seat" + (s === 0 ? " hero" : ""));
+      seat.style.left = (210 + 150 * Math.cos(ang)) + "px"; seat.style.top = (170 + 125 * Math.sin(ang)) + "px";
+      const pi = heroIdx >= 0 ? (heroIdx + s) % n : -1;
+      seat.appendChild(el("div", "who", s === 0 ? "you" : (pi >= 0 && d.players[pi]) || `seat ${s + 1}`));
       const pack = el("div", "pack"); pack.dataset.seat = String(u);
       const f = byU.get(u);
       if (u === 0) {
@@ -245,8 +250,8 @@
         else { pack.appendChild(el("b", null, "—")); pack.appendChild(el("span", null, "waiting")); }
       }
       else if (f) { pack.appendChild(el("b", null, pos(f.pack, f.first_pick))); pack.appendChild(el("span", null, `back at pick ${f.due_pick}`)); }
-      else { s.classList.add("unseen"); pack.appendChild(el("b", null, "unseen")); pack.appendChild(el("span", null, p.pick + u > lastPick ? "won't reach you" : `due pick ${p.pick + u}`)); }
-      s.appendChild(pack); box.appendChild(s);
+      else { seat.classList.add("unseen"); pack.appendChild(el("b", null, "unseen")); pack.appendChild(el("span", null, p.pick + u > lastPick ? "won't reach you" : `due pick ${p.pick + u}`)); }
+      seat.appendChild(pack); box.appendChild(seat);
     }
   }
 
