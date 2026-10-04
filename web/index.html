@@ -36,13 +36,24 @@
         <label><input type="checkbox" id="opt-lands"> Count lands</label>
       </div>
       <div class="grp" id="logdir-grp">
-        <h3>MTGO draft log folder</h3>
+        <h3>MTGO draft log folder <span id="mtgo-status" class="src-status"></span></h3>
         <form id="logdir-form" class="logdir-row">
           <input id="logdir-input" type="text" spellcheck="false" placeholder="C:\Users\you\MTGODraftLogs" autocomplete="off">
           <button type="submit">Save</button>
         </form>
         <div id="logdir-msg" class="logdir-msg"></div>
-        <div class="ds">In MTGO, open Settings, tick <em>Save Draft Log</em>, and paste the folder path shown there.</div>
+        <div id="mtgo-help" class="ds help"></div>
+      </div>
+      <div class="grp" id="arena-grp">
+        <h3>Arena log file <span id="arena-status" class="src-status"></span></h3>
+        <form id="arena-form" class="logdir-row">
+          <input id="arena-input" type="text" spellcheck="false" placeholder="C:\Users\you\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log" autocomplete="off">
+          <button type="submit">Save</button>
+          <button type="button" id="arena-reset">Use default</button>
+        </form>
+        <div id="arena-msg" class="logdir-msg"></div>
+        <div id="arena-help" class="ds help"></div>
+        <div class="ds">This is the standard location for every Arena install. Change it only if you are sure your Arena writes <code>Player.log</code> somewhere else.</div>
       </div>
       <div class="grp">
         <h3>Watching</h3>

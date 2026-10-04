@@ -43,36 +43,54 @@ def load_config() -> dict:
     return {}
 
 
-_LOG_DIR_LINE = re.compile(r"^\s*log_dir\s*=.*$", re.MULTILINE)
+HEADER = (
+    "# MTGO draft log directory: the path from MTGO's Settings -> Save Draft Log.\n"
+    "# arena_log: Arena's Player.log; leave empty for the default location.\n"
+    "# Written by the web UI; edit by hand if you prefer.\n"
+)
 
 
-def save_log_dir(log_dir: str | Path, path: Path | None = None) -> Path:
+def save_setting(key: str, value: str, path: Path | None = None) -> Path:
     """
-    Persist the directory to config.toml (repo root by default) so the next
-    start picks it up. Written with forward slashes, which TOML and Windows
+    Persist one top-level string setting to config.toml (repo root by
+    default). Paths are written with forward slashes, which TOML and Windows
     both accept, so no escaping games. Anything else in the file (a
-    ``[ratings]`` table, comments) is kept as is.
+    ``[ratings]`` table, comments, other keys) is kept as is.
     """
     target = path or (REPO_ROOT / CONFIG_NAME)
-    value = str(Path(log_dir)).replace("\\", "/")
-    line = f"log_dir = {json.dumps(value, ensure_ascii=False)}"
+    line = f"{key} = {json.dumps(value, ensure_ascii=False)}"
+    pattern = re.compile(rf"^\s*{re.escape(key)}\s*=.*$", re.MULTILINE)
     try:
         existing = target.read_text(encoding="utf-8")
     except OSError:
         existing = None
     if existing is None:
-        body = (
-            "# MTGO draft log directory: the path from MTGO's Settings -> Save Draft Log.\n"
-            "# Written by the web UI; edit by hand if you prefer.\n"
-            f"{line}\n"
-        )
-    elif _LOG_DIR_LINE.search(existing):
-        body = _LOG_DIR_LINE.sub(line, existing, count=1)
+        body = HEADER + line + "\n"
+    elif pattern.search(existing):
+        body = pattern.sub(line, existing, count=1)
     else:
         # top-level keys must precede any [table]; put it first
         body = f"{line}\n{existing}"
     target.write_text(body, encoding="utf-8")
     return target
+
+
+def save_log_dir(log_dir: str | Path, path: Path | None = None) -> Path:
+    return save_setting("log_dir", str(Path(log_dir)).replace("\\", "/"), path)
+
+
+def save_arena_log(arena_log: str | Path | None, path: Path | None = None) -> Path:
+    """Empty string means "use the default location"."""
+    value = str(Path(arena_log)).replace("\\", "/") if arena_log else ""
+    return save_setting("arena_log", value, path)
+
+
+def arena_log_setting(cfg: dict | None = None) -> str | None:
+    """The configured Arena log path, or None for the default."""
+    if cfg is None:
+        cfg = load_config()
+    value = cfg.get("arena_log")
+    return str(value) if value else None
 
 
 def cube_settings(cfg: dict | None = None) -> dict:

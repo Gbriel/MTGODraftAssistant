@@ -46,9 +46,17 @@ tick "Add python.exe to PATH" in the installer).
    pip install -e .
    python -m mtgo_draft_assistant
    ```
-4. **Point it at your log folder.** The first time, the page asks for the folder
-   from step 1. Paste it and hit Save. It's remembered in `config.toml`; use
-   "change folder" in the page footer to change it later.
+4. **Point it at your log folder.** The first time, the settings panel (the
+   gear at the top right) opens by itself. Paste the folder from step 1 into
+   **MTGO draft log folder** and press Save. It's remembered in `config.toml`.
+
+The same panel shows, for each client, whether its log was found and what to
+do if not: for MTGO, turn on Save Draft Log and paste the folder; for Arena,
+turn on Options → Account → Detailed Logs (Plugin Support) and restart Arena.
+Arena's log is always at the same place for a normal install, which is filled
+in for you; the field is editable for unusual installs, with a warning, and
+**Use default** puts it back. When something is wrong the gear shows a gold
+mark and the status pill says "check settings".
 
 Leave it running while you draft. The page updates itself after each pick and
 resets when a new draft starts.

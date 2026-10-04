@@ -71,6 +71,23 @@ def test_save_log_dir_keeps_ratings_table(tmp_path, monkeypatch):
     assert ratings_settings({"ratings": "nope"}) == {}
 
 
+def test_arena_log_setting_round_trips_and_keeps_other_keys(tmp_path, monkeypatch):
+    from mtgo_draft_assistant.config import arena_log_setting, save_arena_log
+    cfg = tmp_path / "config.toml"
+    save_log_dir("C:/logs", cfg)
+    save_arena_log(r"D:\Games\MTGA\Player.log", cfg)
+    with open(cfg, "rb") as fh:
+        loaded = tomllib.load(fh)
+    assert loaded["log_dir"] == "C:/logs" and loaded["arena_log"] == "D:/Games/MTGA/Player.log"
+    assert arena_log_setting(loaded) == "D:/Games/MTGA/Player.log"
+    save_arena_log(None, cfg)                      # back to the default
+    with open(cfg, "rb") as fh:
+        loaded = tomllib.load(fh)
+    assert loaded["arena_log"] == "" and loaded["log_dir"] == "C:/logs"
+    assert arena_log_setting(loaded) is None
+    assert cfg.read_text(encoding="utf-8").count("arena_log") == 2   # the key and its header comment
+
+
 def test_missing_everything_raises(tmp_path, monkeypatch):
     monkeypatch.delenv("MTGO_DRAFT_LOG_DIR", raising=False)
     monkeypatch.chdir(tmp_path)

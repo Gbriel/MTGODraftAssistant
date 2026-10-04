@@ -98,7 +98,9 @@
     $("position").textContent = p.status === "idle" ? "No draft" : `Pack ${p.pack} · Pick ${p.pick}`;
     const pill = $("state");
     pill.className = "pill " + p.status;
-    pill.textContent = p.status === "on_screen" ? "pack on screen" : p.status === "waiting" ? "waiting for next pack" : (st.file ? "no picks yet" : "no draft log");
+    const src = st.sources || {}, srcProblem = (src.mtgo && src.mtgo.watched && src.mtgo.status !== "ok") || (src.arena && src.arena.watched && src.arena.status !== "ok");
+    pill.textContent = p.status === "on_screen" ? "pack on screen" : p.status === "waiting" ? "waiting for next pack"
+      : (st.file ? "no picks yet" : srcProblem ? "no draft log · check settings ⚙" : "no draft log");
     const podNote = { inferred: " (inferred from wheels)", assumed: " (assumed)" }[d ? d.pod_size_source : ""] || "";
     $("cube").textContent = d ? `${d.source === "arena" ? "Arena" : "MTGO"} · ${d.set_name || "unknown cube"} · ${d.pod_size || "?"} players${podNote}${d.cards_per_pick > 1 ? ` · ${d.cards_per_pick} cards per pick` : ""}` : "";
     const pend = $("cards-pending");
@@ -161,31 +163,75 @@
     setTog("opt-latest-wrap", "opt-latest", "opt-latest-state", ready("LATEST_EVENT", groupNow), why("LATEST_EVENT", groupNow));
   }
 
-  // ------------------------------------------------------------ log folder
+  // ------------------------------------------------------------ log locations
+  // Both clients' logs are set here. Each shows a status pill and, when the
+  // log can't be used, the steps that fix it.
   const form = $("logdir-form"), input = $("logdir-input"), msg = $("logdir-msg");
-  let logDirPrompted = false;      // open the settings for a missing folder once, not on every update
+  const aform = $("arena-form"), ainput = $("arena-input"), amsg = $("arena-msg");
+  let problemPrompted = false;     // open the settings for a problem once, not on every update
+  let arenaDefault = "";
+  function helpList(items) {
+    const ol = el("ol"); for (const t of items) ol.appendChild(el("li", null, t)); return ol;
+  }
+  function setStatus(id, cls, text) { const s = $(id); s.className = "src-status " + cls; s.textContent = text; }
   function updateLogDir(st) {
-    $("logdir-grp").hidden = !!st.config_locked;
-    if (document.activeElement !== input) input.value = st.log_dir || "";
-    const needed = st.source !== "arena" && (!st.log_dir || !st.log_dir_ok);
-    if (needed) {
-      msg.className = "logdir-msg err"; msg.textContent = st.log_dir ? "That folder doesn't exist on this machine." : "Set the MTGO draft log folder to get started.";
-      if (!logDirPrompted) { logDirPrompted = true; settings.hidden = false; gear.classList.add("on"); }
-    } else {
-      logDirPrompted = false;
-      if (msg.classList.contains("err")) { msg.className = "logdir-msg"; msg.textContent = ""; }
-    }
+    $("logdir-grp").hidden = !!st.config_locked; $("arena-grp").hidden = !!st.config_locked;
+    const src = st.sources || {}, m = src.mtgo || {}, a = src.arena || {};
+    if (document.activeElement !== input) input.value = m.log_dir || st.log_dir || "";
+    arenaDefault = a.default_path || "";
+    if (document.activeElement !== ainput) ainput.value = a.path || "";
+    $("arena-reset").hidden = !!a.is_default;
+
+    // MTGO
+    const mh = $("mtgo-help"); clear(mh);
+    const mtgoSteps = ["In MTGO open Settings and tick Save Draft Log.", "Set the folder it writes to (any folder you like).", "Paste that folder above and press Save."];
+    if (!m.watched) setStatus("mtgo-status", "off", "not watched in this run");
+    else if (m.status === "ok") setStatus("mtgo-status", "ok", `found · ${m.logs_found} draft log${m.logs_found === 1 ? "" : "s"}`);
+    else if (m.status === "no_logs") { setStatus("mtgo-status", "warn", "folder found, no draft logs in it yet"); mh.appendChild(document.createTextNode("Nothing has been written there yet. If you have drafted since turning the setting on, check the folder MTGO shows next to Save Draft Log is this one.")); }
+    else if (m.status === "missing") { setStatus("mtgo-status", "bad", "folder not found"); mh.appendChild(document.createTextNode("That folder does not exist on this machine.")); mh.appendChild(helpList(mtgoSteps)); }
+    else { setStatus("mtgo-status", "bad", "not set"); mh.appendChild(document.createTextNode("The tool does not know where MTGO writes its draft logs.")); mh.appendChild(helpList(mtgoSteps)); }
+
+    // Arena
+    const ah = $("arena-help"); clear(ah);
+    const arenaSteps = ["Open Arena and go to Options → Account.", "Turn on Detailed Logs (Plugin Support).", "Restart Arena; the log is written from then on."];
+    if (!a.watched) setStatus("arena-status", "off", "not watched in this run");
+    else if (a.status === "ok") setStatus("arena-status", "ok", a.detailed_logs === true ? "found · detailed logs on" : "found");
+    else if (a.status === "detailed_logs_off") { setStatus("arena-status", "bad", "detailed logs are off"); ah.appendChild(document.createTextNode("The log is there, but Arena wrote it without draft or game details, so nothing can be read from it.")); ah.appendChild(helpList(arenaSteps)); }
+    else { setStatus("arena-status", "bad", "log not found"); ah.appendChild(document.createTextNode(`No Player.log at ${a.path || "the path above"}. ${a.is_default ? "That is where every normal Arena install writes it, so Arena has probably not run with detailed logs on yet." : "You have set a custom path; make sure it is right, or press Use default."}`)); ah.appendChild(helpList(arenaSteps)); }
+
+    // flag a problem once: gear turns gold and the panel opens, but only while nothing is on screen
+    const problem = (m.watched && m.status !== "ok") || (a.watched && a.status !== "ok");
+    gear.classList.toggle("alert", problem);
+    if (problem && !st.picks.length && !problemPrompted) { problemPrompted = true; settings.hidden = false; gear.classList.add("on"); }
+    if (!problem) problemPrompted = false;
+  }
+  async function postConfig(payload, target) {
+    target.className = "logdir-msg"; target.textContent = "saving…";
+    try {
+      const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await r.json();
+      if (!res.ok) { target.className = "logdir-msg err"; target.textContent = res.error || "could not save"; return null; }
+      target.className = "logdir-msg " + (res.warning ? "err" : "ok");
+      return res;
+    } catch (e) { target.className = "logdir-msg err"; target.textContent = "server not reachable"; return null; }
   }
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    msg.className = "logdir-msg"; msg.textContent = "saving…";
-    try {
-      const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ log_dir: input.value }) });
-      const res = await r.json();
-      if (!res.ok) { msg.className = "logdir-msg err"; msg.textContent = res.error || "could not save"; return; }
-      msg.className = "logdir-msg ok";
-      msg.textContent = `watching ${res.log_dir} · ${res.logs_found} log${res.logs_found === 1 ? "" : "s"} found${res.newest ? ` · newest: ${res.newest}` : ""}${res.warning ? ` · ${res.warning}` : ""}`;
-    } catch (e) { msg.className = "logdir-msg err"; msg.textContent = "server not reachable"; }
+    const res = await postConfig({ log_dir: input.value }, msg);
+    if (res) msg.textContent = `${res.watched ? "watching" : "saved"} ${res.log_dir} · ${res.logs_found} log${res.logs_found === 1 ? "" : "s"} found${res.newest ? ` · newest: ${res.newest}` : ""}${res.warning ? ` · ${res.warning}` : ""}`;
+  });
+  aform.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const value = ainput.value.trim();
+    if (value && arenaDefault && value.replace(/\//g, "\\").toLowerCase() !== arenaDefault.replace(/\//g, "\\").toLowerCase()) {
+      if (!window.confirm("The default location is right for a normal Arena install. Only change it if you are sure Arena writes Player.log somewhere else on this machine.\n\nUse this custom path?")) return;
+    }
+    const res = await postConfig({ arena_log: value }, amsg);
+    if (res) amsg.textContent = `${res.watched ? "watching" : "saved"} ${res.arena_log}${res.is_default ? " (default)" : ""}${res.warning ? ` · ${res.warning}` : res.exists ? " · found" : ""}`;
+  });
+  $("arena-reset").addEventListener("click", async () => {
+    const res = await postConfig({ arena_log: "" }, amsg);
+    if (res) amsg.textContent = `back to the default: ${res.arena_log}${res.warning ? ` · ${res.warning}` : res.exists ? " · found" : ""}`;
   });
 
   // ------------------------------------------------------------ current pack

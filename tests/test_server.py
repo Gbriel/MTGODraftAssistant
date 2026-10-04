@@ -309,7 +309,7 @@ def test_arena_mode_end_to_end(tmp_path):
     scry = ArenaScryfall(cards={})
     resolver = CardResolver(tmp_path / "cache", client=scry)
     s = DraftServer(None, port=0, interval=0.05, resolver=resolver, ratings=ratings,
-                    watcher=ArenaWatcher(log, interval=0.05))
+                    watcher=ArenaWatcher(log, interval=0.05), config_path=tmp_path / "unused.toml")
     s.start()
     try:
         deadline = time.time() + 6
@@ -319,8 +319,10 @@ def test_arena_mode_end_to_end(tmp_path):
                     and st["picks"][0]["available"][0] == "Black Lotus" and st["cards_pending"] == 0):
                 break
             time.sleep(0.05)
-        assert st["source"] == "arena" and st["config_locked"] is True
+        assert st["source"] == "arena" and st["config_locked"] is False
         assert st["file"] == "Player.log"
+        assert st["sources"]["arena"]["watched"] and st["sources"]["arena"]["exists"]
+        assert st["sources"]["mtgo"]["watched"] is False
         assert st["draft"]["source"] == "arena" and st["draft"]["set_name"] == "CubeDraft_Powered_20260908"
         assert st["draft"]["pod_size"] == 8 and st["draft"]["pod_size_source"] == "assumed"
         assert st["position"]["status"] == "on_screen" and st["position"]["pack"] == 1
@@ -331,9 +333,9 @@ def test_arena_mode_end_to_end(tmp_path):
         assert any(n.startswith("#") for n in st["picks"][0]["available"])
         assert "Bristly Bill, Spine Sower" in st["ratings"]
         assert st["cards"]["Black Lotus"]["group"] == "C"
-        # configuration is refused in Arena mode
+        # the MTGO folder can still be saved in Arena-only mode, with a note that it isn't watched
         code, res = _post(s.url + "api/config", {"log_dir": str(tmp_path)})
-        assert code == 403
+        assert code == 200 and res["ok"] and res["watched"] is False and "Arena only" in res["warning"]
 
         # a relaunch rewrites the file with a finished draft
         shutil.copyfile(ARENA_COMPLETE, log)
@@ -446,6 +448,61 @@ def test_arena_set_draft_loads_its_own_17lands_dataset(tmp_path):
         s.stop()
     expansions = {c[0] for c in client.calls}
     assert expansions == {"Cube - Powered", "FRA"}
+
+
+def test_sources_report_missing_logs_and_detailed_logs(tmp_path):
+    """The settings panel's diagnostics: per client, is the log there and usable."""
+    from mtgo_draft_assistant.auto_watcher import AutoWatcher
+
+    mtgo_dir = tmp_path / "mtgo"                       # exists, empty
+    mtgo_dir.mkdir()
+    arena = tmp_path / "arena" / "Player.log"          # does not exist yet
+    s = DraftServer(mtgo_dir, port=0, interval=0.05, config_path=tmp_path / "c.toml",
+                    watcher=AutoWatcher(mtgo_dir, arena, interval=0.05))
+    s.start()
+    try:
+        st = json.loads(_get(s.url + "api/state")[2])
+        src = st["sources"]
+        assert src["mtgo"] == {"watched": True, "log_dir": str(mtgo_dir), "exists": True, "logs_found": 0, "status": "no_logs"}
+        assert src["arena"]["watched"] and src["arena"]["status"] == "missing" and src["arena"]["exists"] is False
+        assert src["arena"]["path"] == str(arena) and src["arena"]["is_default"] is False
+
+        # Arena wrote a log with detailed logs off
+        arena.parent.mkdir()
+        arena.write_bytes(b"Mono path[0] = 'x'\r\nDETAILED LOGS: DISABLED\r\n")
+        time.sleep(0.3)
+        code, res = _post(s.url + "api/config", {"arena_log": str(arena)})     # re-point (same path) to republish
+        assert code == 200 and res["ok"] and res["exists"] and res["detailed_logs"] is False and "Detailed Logs off" in res["warning"]
+        st = json.loads(_get(s.url + "api/state")[2])
+        assert st["sources"]["arena"]["status"] == "detailed_logs_off"
+
+        # now with detailed logs on
+        arena.write_bytes(b"Mono path[0] = 'x'\r\nDETAILED LOGS: ENABLED\r\n")
+        code, res = _post(s.url + "api/config", {"arena_log": str(arena.parent)})   # a directory means its Player.log
+        assert code == 200 and res["arena_log"] == str(arena) and res["detailed_logs"] is True and "warning" not in res
+        st = json.loads(_get(s.url + "api/state")[2])
+        assert st["sources"]["arena"]["status"] == "ok" and st["sources"]["arena"]["detailed_logs"] is True
+
+        # bad inputs
+        code, res = _post(s.url + "api/config", {"arena_log": "relative/Player.log"})
+        assert code == 400 and "full path" in res["error"]
+        code, res = _post(s.url + "api/config", {"arena_log": str(tmp_path / "notes.txt")})
+        assert code == 400 and "Player.log" in res["error"]
+
+        # empty = back to the default location, persisted as such
+        code, res = _post(s.url + "api/config", {"arena_log": ""})
+        assert code == 200 and res["is_default"] is True
+        import tomllib
+        with open(tmp_path / "c.toml", "rb") as fh:
+            assert tomllib.load(fh)["arena_log"] == ""
+        # an MTGO folder save keeps the arena key
+        code, res = _post(s.url + "api/config", {"log_dir": str(mtgo_dir)})
+        assert code == 200 and res["watched"] is True
+        with open(tmp_path / "c.toml", "rb") as fh:
+            cfg = tomllib.load(fh)
+        assert "arena_log" in cfg and os.path.normpath(cfg["log_dir"]) == os.path.normpath(str(mtgo_dir))
+    finally:
+        s.stop()
 
 
 def test_auto_mode_switches_source_in_state(tmp_path):

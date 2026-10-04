@@ -314,12 +314,15 @@ class ArenaWatcher:
         self._seed_from_previous()
 
     def set_log_dir(self, log_dir: str | os.PathLike[str] | None) -> None:
-        """Kept for interface parity; Arena has one fixed file."""
-        if log_dir is not None:
+        """Re-point at another Player.log (a directory means the Player.log inside it); None = default."""
+        if log_dir is None:
+            self.log_path = DEFAULT_LOG
+        else:
             self.log_path = Path(log_dir) / "Player.log" if Path(log_dir).is_dir() else Path(log_dir)
-            self.log_dir = self.log_path.parent
+        self.log_dir = self.log_path.parent
         with self._lock:
             self._reset()
+            self.current = None
 
     def _reset(self) -> None:
         self._parser = ArenaLogParser()
@@ -485,3 +488,27 @@ class ArenaWatcher:
             if update is not None:
                 callback(update)
             stop.wait(self.interval)
+
+
+def log_status(path: Path) -> dict:
+    """
+    What a user needs to know about an Arena log: is it there, and were
+    detailed logs on when Arena wrote it. Arena prints ``DETAILED LOGS:
+    ENABLED`` (or ``DISABLED``) near the top of every log.
+    """
+    out = {"path": str(path), "default_path": str(DEFAULT_LOG), "is_default": path == DEFAULT_LOG,
+           "exists": False, "detailed_logs": None, "previous_exists": False, "size": 0}
+    try:
+        st = path.stat()
+        out["exists"] = True
+        out["size"] = st.st_size
+        with open(path, "rb") as fh:
+            head = fh.read(65536)
+        if b"DETAILED LOGS: ENABLED" in head:
+            out["detailed_logs"] = True
+        elif b"DETAILED LOGS: DISABLED" in head:
+            out["detailed_logs"] = False
+    except OSError:
+        pass
+    out["previous_exists"] = path.with_name("Player-prev.log").is_file()
+    return out

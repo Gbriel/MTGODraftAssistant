@@ -172,6 +172,20 @@ button.link:hover { color: #dcc5f5; }
 .settings .ds .err { color: var(--red); }
 .status-wrap { position: relative; }
 
+/* per-client log status in the settings panel */
+.src-status { font: 600 10.5px var(--mono); letter-spacing: 0; text-transform: none; margin-left: 8px; padding: 1px 7px; border-radius: 999px; }
+.src-status.ok { background: #22402f; color: #a9e7bd; }
+.src-status.warn { background: #4a3a1a; color: #f0c890; }
+.src-status.bad { background: #4a2428; color: #f1a9ae; }
+.src-status.off { background: var(--bg-2); color: var(--dim); }
+.settings .help { color: var(--fg-2); font-family: var(--font); font-size: 12.5px; line-height: 1.55; }
+.settings .help ol { margin: 4px 0 0; padding-left: 18px; }
+.settings .help li { margin: 2px 0; }
+.settings .help b { color: var(--fg); }
+.settings code { font: 11.5px var(--mono); color: var(--fg); }
+.status .gear.alert { color: var(--gold); }
+.status .gear.alert::after { content: "!"; font: 700 10px var(--mono); margin-left: 2px; }
+
 /* log folder form */
 .logdir { padding: 12px 14px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--accent-line); display: flex; flex-direction: column; gap: 8px; }
 .logdir-row { display: flex; gap: 8px; flex-wrap: wrap; }

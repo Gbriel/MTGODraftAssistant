@@ -48,10 +48,18 @@ class AutoWatcher:
         return self.arena.log_path
 
     def set_log_dir(self, log_dir: str | os.PathLike[str] | None) -> None:
-        """The MTGO directory is the configurable one; Arena's file is fixed."""
+        """Re-point the MTGO directory; the source is chosen again on the next poll."""
         with self._lock:
             self.mtgo.set_log_dir(log_dir)
             if self.source == "mtgo":
+                self.source = None
+                self.current = None
+
+    def set_arena_log(self, log_path: str | os.PathLike[str] | None) -> None:
+        """Re-point Arena's Player.log; the source is chosen again on the next poll."""
+        with self._lock:
+            self.arena.set_log_dir(log_path)
+            if self.source == "arena":
                 self.source = None
                 self.current = None
 

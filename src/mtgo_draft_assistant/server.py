@@ -30,9 +30,15 @@ from urllib.parse import urlsplit
 
 from .analysis import Analysis, analyse
 from .arena_cards import ArenaCardDb
+from .arena_log import DEFAULT_LOG as arena_default_log
 from .arena_log import ArenaWatcher
+from .arena_log import log_status as arena_log_status
 from .auto_watcher import AutoWatcher
-from .config import save_log_dir
+from .config import save_arena_log, save_log_dir
+
+
+def arena_default() -> Path:
+    return arena_default_log
 from .cube_list import CubeList, from_names
 from .pool import PoolReport, pool_state
 from .ratings import CardRating, RatingsPool, RatingsProvider, dataset_for_event
@@ -396,10 +402,10 @@ class DraftServer:
         if self.arena:
             watcher.namer = self._arena_name
             self.log_dir = watcher.log_dir
-            allow_config = False            # one fixed file; nothing to configure
         elif self.auto:
             watcher.arena.namer = self._arena_name
         self.config_locked = not allow_config
+        self._settings_version = 0
         self.store = StateStore(self._idle_state(0))
         self.httpd = DraftHTTPServer(
             (host, port), self.store, verbose=verbose,
@@ -467,10 +473,55 @@ class DraftServer:
         state["ui_version"] = self._ui_version
         state["arena_log"] = str(self.watcher.arena_log) if self.auto else (
             str(self.watcher.log_path) if self.arena else None)
+        state["sources"] = self._sources()
         return state
 
     def _active_source(self, update: Update) -> str:
         return update.draft.source if (self.auto or self.arena) else "mtgo"
+
+    def _arena_watcher(self) -> ArenaWatcher | None:
+        if self.arena:
+            return self.watcher
+        if self.auto:
+            return self.watcher.arena
+        return None
+
+    def _mtgo_watcher(self) -> DraftWatcher | None:
+        if self.auto:
+            return self.watcher.mtgo
+        if not self.arena:
+            return self.watcher
+        return None
+
+    def _sources(self) -> dict:
+        """
+        Per client: where the log is expected, whether it is there, and what
+        the user can do about it. Rendered by the settings panel.
+        """
+        mtgo_w = self._mtgo_watcher()
+        mtgo: dict = {"watched": mtgo_w is not None, "log_dir": str(self.log_dir) if self.log_dir else None,
+                      "exists": False, "logs_found": 0, "status": "not_set"}
+        if self.log_dir is not None:
+            if self.log_dir.is_dir():
+                mtgo["exists"] = True
+                try:
+                    mtgo["logs_found"] = len(list(self.log_dir.glob("*.txt")))
+                except OSError:
+                    pass
+                mtgo["status"] = "ok" if mtgo["logs_found"] else "no_logs"
+            else:
+                mtgo["status"] = "missing"
+        arena_w = self._arena_watcher()
+        arena: dict = {"watched": arena_w is not None}
+        path = arena_w.log_path if arena_w is not None else arena_default()
+        arena.update(arena_log_status(path))
+        if not arena["exists"]:
+            arena["status"] = "missing"
+        elif arena["detailed_logs"] is False:
+            arena["status"] = "detailed_logs_off"
+        else:
+            arena["status"] = "ok"
+        return {"mtgo": mtgo, "arena": arena}
 
     def _arena_name(self, grp_id: int) -> str | None:
         """
@@ -628,7 +679,8 @@ class DraftServer:
         if not path.is_dir():
             return {"ok": False, "error": f"not a directory: {path}"}
         self.log_dir = path
-        self.watcher.set_log_dir(path)
+        if self._mtgo_watcher() is not None:
+            self.watcher.set_log_dir(path)
         try:
             saved = save_log_dir(path, self.config_path)
         except OSError as e:
@@ -636,27 +688,72 @@ class DraftServer:
             save_error = str(e)
         else:
             save_error = None
-        first = self.watcher.poll()
+        first = self.watcher.poll() if self._mtgo_watcher() is not None else None
         if first is not None:
             self._on_update(first)
         else:
             self._publish_idle()
-        logs = len(list(path.glob(self.watcher.pattern)))
+        logs = len(list(path.glob("*.txt")))
         result = {
             "ok": True,
             "log_dir": str(path),
             "logs_found": logs,
             "newest": newest_log(path).name if logs else None,
             "saved_to": str(saved) if saved else None,
+            "watched": self._mtgo_watcher() is not None,
         }
         if save_error:
             result["warning"] = f"watching the new directory, but could not save config: {save_error}"
+        elif not result["watched"]:
+            result["warning"] = "saved, but this run watches Arena only (started with --arena)"
+        return result
+
+    def set_arena_log(self, value: str) -> dict:
+        """
+        Re-point Arena's Player.log and persist it. Empty = the default
+        location. The file need not exist yet (Arena may not have run), but a
+        warning says so. A directory means the Player.log inside it.
+        """
+        raw = (value or "").strip().strip('"')
+        path: Path | None = Path(raw).expanduser() if raw else None
+        if path is not None and path.is_dir():
+            path = path / "Player.log"
+        if path is not None and not path.is_absolute():
+            return {"ok": False, "error": f"enter a full path to Player.log, not {raw!r}"}
+        if path is not None and path.name.lower() != "player.log":
+            return {"ok": False, "error": f"the Arena log is called Player.log; got {path.name!r}"}
+        if self.auto:
+            self.watcher.set_arena_log(path)
+        elif self.arena:
+            self.watcher.set_log_dir(path)
+        try:
+            saved = save_arena_log(path, self.config_path)
+            save_error = None
+        except OSError as e:
+            saved, save_error = None, str(e)
+        first = self.watcher.poll() if (self.auto or self.arena) else None
+        if first is not None:
+            self._on_update(first)
+        else:
+            self._publish_idle()
+        status = arena_log_status(path or arena_default())
+        result = {"ok": True, "arena_log": status["path"], "is_default": status["is_default"],
+                  "exists": status["exists"], "detailed_logs": status["detailed_logs"],
+                  "saved_to": str(saved) if saved else None, "watched": self.auto or self.arena}
+        if not status["exists"]:
+            result["warning"] = "no Player.log there yet; it appears once Arena runs with Detailed Logs on"
+        elif status["detailed_logs"] is False:
+            result["warning"] = "found, but Arena wrote it with Detailed Logs off"
+        if save_error:
+            result["warning"] = (result.get("warning", "") + " · could not save config: " + save_error).strip(" ·")
         return result
 
     def _on_config(self, payload: dict) -> dict:
         if "log_dir" in payload:
             return self.set_log_dir(str(payload["log_dir"]))
-        return {"ok": False, "error": "nothing to change (expected log_dir)"}
+        if "arena_log" in payload:
+            return self.set_arena_log(str(payload["arena_log"] or ""))
+        return {"ok": False, "error": "nothing to change (expected log_dir or arena_log)"}
 
     def _on_cards_changed(self) -> None:
         """Called from the resolver/ratings threads; coalesce into one push."""

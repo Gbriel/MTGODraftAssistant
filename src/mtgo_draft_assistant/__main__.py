@@ -21,6 +21,7 @@ from .auto_watcher import AutoWatcher
 from .config import (
     REPO_ROOT,
     ConfigError,
+    arena_log_setting,
     cube_settings,
     load_config,
     ratings_settings,
@@ -74,7 +75,10 @@ def main(argv: list[str] | None = None) -> int:
 
     log_dir = None
     watcher = None
-    arena_log = Path(args.arena_log).expanduser() if args.arena_log else DEFAULT_ARENA_LOG
+    cfg = load_config()
+    configured_arena = arena_log_setting(cfg)        # set from the page; empty = default
+    arena_log = (Path(args.arena_log).expanduser() if args.arena_log
+                 else Path(configured_arena).expanduser() if configured_arena else DEFAULT_ARENA_LOG)
     if not args.mtgo:
         if not arena_log.is_file():
             print(f"Arena log not found at {arena_log}; will use it if it appears "
@@ -95,7 +99,6 @@ def main(argv: list[str] | None = None) -> int:
 
     resolver = None if args.no_cards else CardResolver(args.cache_dir)
 
-    cfg = load_config()
     rcfg = ratings_settings(cfg)
     pool = None
     if not args.no_ratings and rcfg.get("enabled", True):
