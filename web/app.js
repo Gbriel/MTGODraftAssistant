@@ -273,7 +273,11 @@
     if ($("pane-pod").hidden) return;
     const n = d.pod_size || 8, cpp = d.cards_per_pick || 1, size = d.pack_sizes[String(p.pack)] || 15, lastPick = Math.ceil(size / cpp);
     const passLeft = p.pack !== 2;
-    $("pod-note").textContent = `${passLeft ? "packs pass left" : "packs pass right"} · hover a pack to see it`;
+    // the arrival order in words, so it never depends on reading the circle
+    const order = st.in_flight.slice().sort((a, b) => a.due_pick - b.due_pick)
+      .map((f) => `${pos(f.pack, f.first_pick)} at pick ${f.due_pick} (${Math.max(0, f.passed.length - (n - 1) * cpp)} left)`);
+    $("pod-note").textContent = `${passLeft ? "packs pass left: yours come back from your right" : "packs pass right: yours come back from your left"} · hover a seat to see its pack`
+      + (order.length ? ` · coming back to you: ${order.join(", ")}` : "");
     box.appendChild(el("div", "ring"));
     const c = el("div", "centre", passLeft ? "↻" : "↺"); c.appendChild(el("small", null, passLeft ? "packs pass left" : "packs pass right")); box.appendChild(c);
     const heroIdx = d.players.indexOf(d.hero);
