@@ -295,7 +295,11 @@
         else if (f) { pack.appendChild(el("b", null, pos(f.pack, f.first_pick))); pack.appendChild(el("span", null, "arriving now")); }
         else { pack.appendChild(el("b", null, "—")); pack.appendChild(el("span", null, "waiting")); }
       }
-      else if (f) { pack.appendChild(el("b", null, pos(f.pack, f.first_pick))); pack.appendChild(el("span", null, `back at pick ${f.due_pick}`)); }
+      else if (f) {
+        const left = Math.max(0, f.passed.length - (n - 1) * cpp);
+        pack.appendChild(el("b", null, pos(f.pack, f.first_pick)));
+        pack.appendChild(el("span", null, `${left} of ${f.passed.length} left at pick ${f.due_pick}`));
+      }
       else { seat.classList.add("unseen"); pack.appendChild(el("b", null, "unseen")); pack.appendChild(el("span", null, p.pick + u > lastPick ? "won't reach you" : `due pick ${p.pick + u}`)); }
       seat.appendChild(pack); box.appendChild(seat);
     }
@@ -525,10 +529,22 @@
   function showPack(u) {
     const st = lastState; if (!st) return;
     const f = st.in_flight.find((x) => x.picks_until_return === u);
-    const names = u === 0 && st.current_pack ? st.current_pack.cards : f ? f.passed : null;
+    let names = u === 0 && st.current_pack ? st.current_pack.cards : f ? f.passed : null;
     if (!names) { preview.hidden = true; return; }
     clear(preview); preview.className = "popover pack";
-    preview.appendChild(el("div", "title", u === 0 ? `In front of you · ${names.length} cards` : `${pos(f.pack, f.first_pick)} · ${names.length} you passed · back at pick ${f.due_pick} · you took ${f.your_pick}`));
+    if (u === 0 && st.current_pack) {
+      preview.appendChild(el("div", "title", `In front of you · ${names.length} cards`));
+    } else {
+      // what you passed: the pod takes (N-1) per lap before it returns, so only
+      // a few of these come back. Most likely to wheel first (highest ALSA).
+      const d = st.draft, n = d.pod_size || 8, cpp = d.cards_per_pick || 1;
+      const gone = Math.min(names.length, (n - 1) * cpp), left = names.length - gone;
+      preview.appendChild(el("div", "title", `${pos(f.pack, f.first_pick)} · you took ${f.your_pick} and passed ${names.length}`));
+      preview.appendChild(el("div", "title warn", `the pod takes ${gone} of these before it returns at pick ${f.due_pick}: only ${left} will be there`));
+      preview.appendChild(el("div", "title muted", "sorted by how likely each is to wheel (17Lands ALSA, highest first)"));
+      const alsa = (nm) => { const r = ratings[nm]; return r && r.alsa != null ? r.alsa : -1; };
+      names = names.slice().sort((a, b) => alsa(b) - alsa(a));
+    }
     const tiles = el("div", "tiles"); for (const n of names) tiles.appendChild(tile(n)); preview.appendChild(tiles); preview.hidden = false;
   }
   document.addEventListener("mouseover", (ev) => {

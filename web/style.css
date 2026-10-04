@@ -238,5 +238,7 @@ button.link:hover { color: #dcc5f5; }
 .popover .info .l { font: 12px var(--mono); color: var(--fg-2); }
 .popover.pack { flex-direction: column; gap: 8px; max-width: 520px; }
 .popover.pack .title { font: 600 12px var(--mono); color: var(--fg-2); }
+.popover.pack .title.warn { color: var(--gold); }
+.popover.pack .title.muted { color: var(--dim); font-weight: 400; }
 .popover.pack .tiles { gap: 4px; }
 .popover.pack .tile { width: 60px; }
