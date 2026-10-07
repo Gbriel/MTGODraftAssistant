@@ -504,6 +504,10 @@
     if (st.ui_version) { if (uiVersion === null) uiVersion = st.ui_version; else if (st.ui_version !== uiVersion) { location.reload(); return; } }
     lastState = st; cards = st.cards || {}; lastMeta = st.ratings_meta;
     const key = wantedKey(); ratings = (key ? (st.ratings_sets || {})[key] : st.ratings) || {};
+    // the deck view only makes sense while there is an Arena deck or game; an MTGO
+    // draft (or a fresh log) must never be hidden behind a stale #deck address
+    const hasDeck = !!(st.arena_game && (st.arena_game.deck || st.arena_game.game));
+    if (location.hash === "#deck" && !hasDeck) { history.replaceState(null, "", location.pathname); route(); return; }
     renderHeader(st); renderRatings(st); updateLogDir(st);
     if (location.hash === "#deck") { renderDeck(st); return; }
     renderCurrent(st); renderPod(st); renderPicks(st); renderWheels(st); renderPool(st);
