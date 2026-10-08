@@ -20,6 +20,7 @@ import json
 import mimetypes
 import re
 import threading
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime
@@ -40,6 +41,8 @@ from .config import save_arena_log, save_log_dir
 def arena_default() -> Path:
     return arena_default_log
 from .cube_list import CubeList, from_names
+from .matches import MatchWatcher, guess_hero, match_view
+from .mtgo_deck import DekWatcher, draft_started_at
 from .pool import PoolReport, pool_state
 from .ratings import CardRating, RatingsPool, RatingsProvider, dataset_for_event
 from .scryfall import CardInfo, CardResolver
@@ -232,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
-        if path != "/api/config":
+        if path not in ("/api/config", "/api/deck"):
             self._error(HTTPStatus.NOT_FOUND, "not found")
             return
         try:
@@ -243,10 +246,11 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as e:
             self._json({"ok": False, "error": f"bad request: {e}"}, HTTPStatus.BAD_REQUEST)
             return
-        if self.server.on_config is None:
+        handler = self.server.on_deck if path == "/api/deck" else self.server.on_config
+        if handler is None:
             self._json({"ok": False, "error": "configuration is read-only"}, HTTPStatus.FORBIDDEN)
             return
-        result = self.server.on_config(payload)
+        result = handler(payload)
         self._json(result, HTTPStatus.OK if result.get("ok") else HTTPStatus.BAD_REQUEST)
 
     # responses
@@ -338,12 +342,14 @@ class DraftHTTPServer(ThreadingHTTPServer):
 
     def __init__(self, address: tuple[str, int], store: StateStore, verbose: bool = False,
                  image_dir: Path | None = None,
-                 on_config: Callable[[dict], dict] | None = None) -> None:
+                 on_config: Callable[[dict], dict] | None = None,
+                 on_deck: Callable[[dict], dict] | None = None) -> None:
         super().__init__(address, Handler)
         self.store = store
         self.verbose = verbose
         self.image_dir = image_dir
         self.on_config = on_config
+        self.on_deck = on_deck
 
 
 # -- orchestration -----------------------------------------------------------
@@ -406,11 +412,20 @@ class DraftServer:
             watcher.arena.namer = self._arena_name
         self.config_locked = not allow_config
         self._settings_version = 0
+        # MTGO: the deck comes from a .dek the user exports into the log folder,
+        # the game from the client's match logs
+        self.dek = DekWatcher(self.log_dir)
+        self.matches = MatchWatcher()
+        self._mtgo_hero: str | None = None
+        # sideboarding told to the app by hand, for the current match only
+        self._edits = {"key": None, "to_main": Counter(), "to_side": Counter()}
+        self._edits_lock = threading.Lock()
         self.store = StateStore(self._idle_state(0))
         self.httpd = DraftHTTPServer(
             (host, port), self.store, verbose=verbose,
             image_dir=resolver.image_dir if resolver else None,
             on_config=self._on_config if allow_config else None,
+            on_deck=self._on_deck,
         )
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -567,38 +582,162 @@ class DraftServer:
             self._cube_key = key
         return self._cube_from_ratings
 
-    def _arena_game_state(self, source: str) -> dict | None:
-        """Deck and live game for an Arena draft, with card ids named."""
-        if source != "arena" or not hasattr(self.watcher, "deck"):
-            return None
-        deck = self.watcher.deck()
-        game = self.watcher.game()
-        if deck is None and game is None:
-            return None
+    # -- deck and game, for either client ---------------------------------------
 
-        def card(grp: int, n: int) -> dict:
-            name = self._arena_name(grp)
-            return {"grp": grp, "name": name or f"#{grp}", "n": n, "named": name is not None}
+    def _edits_for(self, key: str | None) -> tuple[Counter, Counter]:
+        """Sideboard moves for this match; a different match (or none) clears them."""
+        with self._edits_lock:
+            if self._edits["key"] != key:
+                self._edits = {"key": key, "to_main": Counter(), "to_side": Counter()}
+            return Counter(self._edits["to_main"]), Counter(self._edits["to_side"])
 
-        out: dict = {"deck": None, "game": None}
-        if deck is not None:
-            out["deck"] = {
-                "event": deck.event_name, "submitted_at": deck.submitted_at,
-                "main": [card(g, q) for g, q in deck.main],
-                "side": [card(g, q) for g, q in deck.side],
-                "main_count": deck.main_count, "side_count": deck.side_count,
-            }
-        if game is not None:
-            out["game"] = {
-                **{k: game[k] for k in ("match_id", "game_number", "stage", "over", "turn", "my_seat",
-                                        "opponent", "life", "library", "seat_known")},
-                "remaining": [card(g, n) for g, n in sorted((game["remaining"] or {}).items())]
-                             if game["remaining"] is not None else None,
-                "seen_mine": [card(g, n) for g, n in game["seen_mine"].items()],
-                "unexpected": [card(g, n) for g, n in game["unexpected"].items()],
-                "seen_theirs": [card(g, n) for g, n in game["seen_theirs"].items()],
-            }
+    @staticmethod
+    def _apply_edits(main: Counter, side: Counter, to_main: Counter, to_side: Counter) -> tuple[Counter, Counter]:
+        main, side = Counter(main), Counter(side)
+        for name, n in to_side.items():
+            k = min(n, main[name])
+            if k:
+                main[name] -= k
+                side[name] += k
+        for name, n in to_main.items():
+            k = min(n, side[name])
+            if k:
+                side[name] -= k
+                main[name] += k
+        return +main, +side
+
+    def _game_state(self, source: str, update: Update) -> dict | None:
+        """
+        The Deck pane's data for the draft on screen. Arena: the submitted
+        deck and the live game from the log. MTGO: a .dek the user exported
+        into the log folder and the client's match log. Both go through the
+        same per-match sideboard edits, so "still in library" follows them.
+        """
+        if source == "arena":
+            if not hasattr(self.watcher, "deck"):
+                return None
+            deck = self.watcher.deck()
+            game = self.watcher.game()
+            if deck is None and game is None:
+                return None
+
+            def nm(grp: int) -> str:
+                return self._arena_name(grp) or f"#{grp}"
+
+            main = Counter({nm(g): q for g, q in deck.main}) if deck else None
+            side = Counter({nm(g): q for g, q in deck.side}) if deck else None
+            deck_info = ({"event": deck.event_name, "submitted_at": deck.submitted_at,
+                          "source": "Arena deck submission"} if deck else None)
+            seen_mine = Counter({nm(g): n for g, n in game["seen_mine"].items()}) if game else None
+            seen_theirs = Counter({nm(g): n for g, n in game["seen_theirs"].items()}) if game else None
+            fields = ({k: game[k] for k in ("match_id", "game_number", "stage", "over", "turn", "my_seat",
+                                            "opponent", "life", "library", "seat_known")} if game else None)
+            match_id = game["match_id"] if game else None
+            return self._finish_game_state("arena", deck_info, main, side, fields, seen_mine, seen_theirs, match_id)
+
+        # MTGO
+        started = draft_started_at(update.draft.timestamp)
+        dek = self.dek.deck(started)
+        if self._mtgo_hero is None:
+            self._mtgo_hero = update.draft.hero or guess_hero()
+        match = self.matches.match(started)
+        if dek is None and match is None:
+            return None
+        main = Counter(); side = Counter()
+        deck_info = None
+        if dek is not None:
+            for name, q in dek.main:
+                main[name] += q
+            for name, q in dek.side:
+                side[name] += q
+            deck_info = {"event": update.draft.set_name, "submitted_at": dek.modified_at,
+                         "source": f"{dek.path.name} (exported from MTGO)"}
+        view = match_view(match, update.draft.hero or self._mtgo_hero, None) if match else None
+        fields = None
+        if view:
+            fields = {k: view[k] for k in ("match_id", "game_number", "stage", "over", "turn", "my_seat",
+                                           "opponent", "life", "library", "seat_known")}
+            fields.update({"score": view["score"], "games": view["games"], "hero": view["hero"]})
+        return self._finish_game_state(
+            "mtgo", deck_info, main if dek else None, side if dek else None, fields,
+            Counter(view["seen_mine"]) if view else None, Counter(view["seen_theirs"]) if view else None,
+            view["match_id"] if view else None,
+            hint=None if dek else f"No .dek for this draft in {self.log_dir}. In MTGO's deck editor, "
+                                   f"Export the deck as a .dek file into that folder.",
+            dek_error=self.dek.error,
+        )
+
+    def _finish_game_state(self, client: str, deck_info: dict | None, main: Counter | None,
+                           side: Counter | None, fields: dict | None, seen_mine: Counter | None,
+                           seen_theirs: Counter | None, match_id: str | None,
+                           hint: str | None = None, dek_error: str | None = None) -> dict:
+        key = f"{client}:{match_id or 'no-match'}"
+        to_main, to_side = self._edits_for(key)
+        if main is not None and side is not None:
+            main, side = self._apply_edits(main, side, to_main, to_side)
+
+        def cards(c: Counter | None) -> list[dict]:
+            return [{"name": n, "n": q, "named": not n.startswith("#")} for n, q in c.items()] if c else []
+
+        out: dict = {"client": client, "deck": None, "game": None, "hint": hint, "dek_error": dek_error,
+                     "edits": {"to_main": sorted(to_main.elements()), "to_side": sorted(to_side.elements()),
+                               "active": bool(to_main or to_side), "match": match_id}}
+        if deck_info is not None and main is not None and side is not None:
+            out["deck"] = {**deck_info, "main": cards(main), "side": cards(side),
+                           "main_count": sum(main.values()), "side_count": sum(side.values())}
+        if fields is not None:
+            remaining = None
+            unexpected: Counter = Counter()
+            mine = seen_mine or Counter()
+            if main is not None:
+                remaining = Counter()
+                for name, q in main.items():
+                    left = q - mine.get(name, 0)
+                    if left > 0:
+                        remaining[name] = left
+                for name, n in mine.items():
+                    extra = n - main.get(name, 0)
+                    if extra > 0:
+                        unexpected[name] = extra
+            out["game"] = {**fields,
+                           "remaining": cards(Counter(dict(sorted(remaining.items())))) if remaining is not None else None,
+                           "seen_mine": cards(mine), "unexpected": cards(unexpected),
+                           "seen_theirs": cards(seen_theirs or Counter())}
         return out
+
+    def _on_deck(self, payload: dict) -> dict:
+        """Sideboard edits from the page: move one card, or reset, for the current match."""
+        with self._last_lock:
+            last = self._last
+        if last is None:
+            return {"ok": False, "error": "no draft on screen"}
+        update, _ = last
+        source = self._active_source(update)
+        state = self._game_state(source, update)
+        if state is None or state["deck"] is None:
+            return {"ok": False, "error": "no deck to edit"}
+        key = f"{state['client']}:{state['edits']['match'] or 'no-match'}"
+        with self._edits_lock:
+            if payload.get("reset"):
+                self._edits = {"key": key, "to_main": Counter(), "to_side": Counter()}
+            else:
+                name = str(payload.get("card") or "").strip()
+                to = payload.get("to")
+                if not name or to not in ("main", "side"):
+                    return {"ok": False, "error": "expected {card, to: main|side} or {reset: true}"}
+                pool = {c["name"]: c["n"] for c in (state["deck"]["side"] if to == "main" else state["deck"]["main"])}
+                if pool.get(name, 0) <= 0:
+                    return {"ok": False, "error": f"{name} is not in the {'sideboard' if to == 'main' else 'main deck'}"}
+                src, dst = ("to_side", "to_main") if to == "main" else ("to_main", "to_side")
+                if self._edits[src][name] > 0:
+                    self._edits[src][name] -= 1         # undo an earlier move the other way
+                    self._edits[src] = +self._edits[src]
+                else:
+                    self._edits[dst][name] += 1
+        self._republish()
+        new_state = self._game_state(source, update) or {}
+        return {"ok": True, "edits": new_state.get("edits"),
+                "main_count": new_state.get("deck", {}).get("main_count") if new_state.get("deck") else None}
 
     @staticmethod
     def _game_names(state: dict | None) -> list[str]:
@@ -625,7 +764,7 @@ class DraftServer:
         source = self._active_source(update)
         cube = self.current_cube(source, update)
         pool = pool_state(update.draft, analysis, cube)
-        arena_game = self._arena_game_state(source)
+        arena_game = self._game_state(source, update)
         cards: dict[str, CardInfo] = {}
         pending = 0
         errors: list[str] = []
@@ -660,6 +799,8 @@ class DraftServer:
         analysis = analyse(update.draft)
         with self._last_lock:
             self._last = (update, analysis)
+        if update.new_draft:
+            self._mtgo_hero = None
         if self.verbose:
             d = update.draft
             live = d.current_pack
@@ -679,6 +820,7 @@ class DraftServer:
         if not path.is_dir():
             return {"ok": False, "error": f"not a directory: {path}"}
         self.log_dir = path
+        self.dek.set_folder(path)
         if self._mtgo_watcher() is not None:
             self.watcher.set_log_dir(path)
         try:
@@ -766,6 +908,8 @@ class DraftServer:
 
     def _republish(self) -> None:
         with self._last_lock:
+            if self._card_timer is not None:
+                self._card_timer.cancel()
             self._card_timer = None
             last = self._last
         if self._stop.is_set():

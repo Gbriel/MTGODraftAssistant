@@ -105,12 +105,29 @@ Picked: Broadside Bombardiers
   `%LOCALAPPDATA%\Apps\2.0\Data\**\AppFiles\*\Match_GameLog_*.dat` and taking the
   directory with the most recent files. There are multiple deployment folders
   (old versions); pick the live one by mtime.
-- Format markers (from the community `cderickson/MTGO-Tracker` parser — **treat as
-  unverified against the current client, re-confirm before relying on them**):
-  whole log splits on `@P`; card names wrapped `@[` … `@]`; phrases
-  ` joined the game.`, ` begins the game with ` (mulligan count spelled as a word),
-  `Turn N: <player>`, ` has conceded`, ` wins the game`. No timestamp inside the
-  file — that parser uses file mtime as the match time.
+- **Format, verified 2026-10-08** on a real log (349 records, none unparsed;
+  fixture in `tests/fixtures/mtgo/`). Binary records, each: 8-byte .NET
+  `DateTime` ticks (little-endian, local time), 1 kind byte (0), a 7-bit
+  encoded length, UTF-8 text starting `@P` (sometimes `@P@P`). So there **is**
+  a timestamp per line, contrary to the community parser's assumption. Card
+  references are `@[Name@:catalogId,instanceId:@]`; **the instance id changes
+  every time a card changes zone** (Plains had 7 ids in one match), so count
+  cards by name (cube decks are singleton) and basics by id. Lines seen:
+  `X rolled a N.`, `X joined the game.`, `X chooses to play first.`, `X
+  begins the game with seven cards in hand.`, `X puts a card on the bottom
+  of their library and begins the game with six cards in hand.`, `Turn N: X`
+  (**numbered per player**), `X draws a card.` (never named), `X plays /
+  casts / discards / reveals / activates an ability of [card]`, `X puts a
+  triggered ability from [card] onto the stack`, `X wins the game.`, `X has
+  conceded`, `X wins the match 2-1`. **No life totals, no draws by name, no
+  hand, no library, no deck registration, no sideboarding.** Whether the
+  file is written during the match or at its end is still unverified.
+- **No decklist anywhere on disk** (searched all 41,104 files MTGO keeps,
+  2026-10-07). The only source is the client's deck editor Export, a `.dek`
+  XML file (`<Cards CatID Quantity Sideboard Name/>`), which the user saves
+  into the draft-log folder by hand; `mtgo_deck.py` picks the newest one
+  written after the draft started. Sideboarding is told to the app by
+  dragging cards on the page and is forgotten when the next match starts.
 
 ### 2.4 17Lands
 
@@ -375,7 +392,8 @@ src/mtgo_draft_assistant/
     scryfall.py      # card colours/type/images — DONE; lazy per-card, SQLite + JPEG cache
                      # (deliberately NOT the bulk file: it is hundreds of MB and the
                      # user asked for low memory; a cube shows a few hundred names)
-    matches.py       # P2: match log parsing
+    matches.py       # MTGO match log parsing + newest-match watcher — DONE (format verified)
+    mtgo_deck.py     # .dek reader + folder watcher — DONE
     stats.py         # P2: personal WR, pod records
     db.py            # SQLite schema + migrations
 web/                 # static single-page UI, no build step — DONE

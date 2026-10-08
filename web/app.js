@@ -426,23 +426,62 @@
     c.appendChild(face);
     return c;
   }
+  // sideboarding told to the app by hand: drag between the curve and the sideboard row
+  async function postDeck(payload) {
+    try {
+      const r = await fetch("/api/deck", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await r.json();
+      if (!res.ok) $("deck-edits").textContent = res.error || "could not change the deck";
+    } catch (e) { $("deck-edits").textContent = "server not reachable"; }
+  }
+  function draggable(node, name, from) {
+    node.draggable = true;
+    node.addEventListener("dragstart", (ev) => { ev.dataTransfer.setData("text/plain", JSON.stringify({ name, from })); ev.dataTransfer.effectAllowed = "move"; });
+  }
+  function dropzone(node, to) {
+    node.addEventListener("dragover", (ev) => { ev.preventDefault(); node.classList.add("over"); });
+    node.addEventListener("dragleave", () => node.classList.remove("over"));
+    node.addEventListener("drop", (ev) => {
+      ev.preventDefault(); node.classList.remove("over");
+      try { const d = JSON.parse(ev.dataTransfer.getData("text/plain")); if (d.from !== to) postDeck({ card: d.name, to }); } catch (e) { /* ignore */ }
+    });
+  }
+  dropzone($("deck-curve"), "main"); dropzone($("deck-side"), "side");
+
   function renderDeck(st) {
     if (!st) return;
-    const ag = st.arena_game || {}, dk = ag.deck, g = ag.game, lib = prefs.deckMode === "lib";
+    const ag = st.arena_game || {}, dk = ag.deck, g = ag.game, lib = prefs.deckMode === "lib", mtgo = ag.client === "mtgo";
     $("tab-deck").classList.toggle("on", !lib); $("tab-lib").classList.toggle("on", lib);
-    const curve = $("deck-curve"), side = $("deck-side"), unexp = $("deck-unexpected"), empty = $("deck-empty");
-    clear(curve); clear(side); clear(unexp); unexp.hidden = true; empty.textContent = "";
+    $("tab-lib").textContent = mtgo ? "Not yet seen" : "Still in library";
+    const curve = $("deck-curve"), side = $("deck-side"), unexp = $("deck-unexpected"), empty = $("deck-empty"), edits = $("deck-edits");
+    clear(curve); clear(side); clear(unexp); clear(edits); unexp.hidden = true; empty.textContent = "";
     // status line doubles as the game header when a game is on
     if (g) {
-      $("position").textContent = g.over ? `Game ${g.game_number || "?"} over` : `Game ${g.game_number || "?"}${g.turn ? " · turn " + g.turn : ""}`;
+      $("position").textContent = g.over ? `Match over${g.score ? " · " + g.score : ""}` : `Game ${g.game_number || "?"}${g.turn ? " · turn " + g.turn : ""}`;
       const pill = $("state");
-      if (g.wins != null && g.losses != null) { const w = g.wins, l = g.losses; pill.className = "pill " + (w > l ? "up" : w < l ? "down" : "waiting"); pill.textContent = w === l ? `tied ${w}–${l}` : w > l ? `up ${w}–${l}` : `down ${w}–${l}`; }
-      else { pill.className = "pill"; pill.textContent = g.stage || "in progress"; }
-      const me = g.my_seat, lifeMe = me != null ? g.life[String(me)] : undefined;
-      const lifeOpp = Object.entries(g.life || {}).filter(([s]) => String(s) !== String(me)).map(([, v]) => v)[0];
-      $("cube").textContent = `${g.opponent ? "vs " + g.opponent : ""}${lifeMe !== undefined ? ` · life ${lifeMe} – ${lifeOpp === undefined ? "?" : lifeOpp}` : ""}${g.library != null ? ` · ${g.library} in library` : ""}${g.seat_known ? "" : " · seat not known yet"}`;
+      const games = g.games || [], me = g.hero, w = games.filter((x) => x.winner && x.winner === me).length, l = games.filter((x) => x.winner && x.winner !== me).length;
+      if (games.length && me) { pill.className = "pill " + (w > l ? "up" : w < l ? "down" : "waiting"); pill.textContent = w === l ? `tied ${w}–${l}` : w > l ? `up ${w}–${l}` : `down ${w}–${l}`; }
+      else { pill.className = "pill"; pill.textContent = g.over ? "match over" : "in progress"; }
+      const seat = g.my_seat, lifeMe = seat != null ? g.life[String(seat)] : undefined;
+      const lifeOpp = Object.entries(g.life || {}).filter(([s]) => String(s) !== String(seat)).map(([, v]) => v)[0];
+      $("cube").textContent = `${g.opponent ? "vs " + g.opponent : ""}${lifeMe !== undefined ? ` · life ${lifeMe} – ${lifeOpp === undefined ? "?" : lifeOpp}` : ""}${g.library != null ? ` · ${g.library} in library` : ""}${g.seat_known ? "" : " · which player you are is not known yet"}`;
     }
-    if (!dk) { empty.textContent = g ? "No deck submission in this log, so the library cannot be worked out." : "No Arena deck or game in this log yet."; $("pane-opp").hidden = !g; }
+    // sideboard edits for this match
+    const ed = ag.edits;
+    edits.hidden = !(ed && ed.active);
+    if (ed && ed.active) {
+      const parts = [];
+      if (ed.to_main.length) parts.push("in: " + ed.to_main.join(", "));
+      if (ed.to_side.length) parts.push("out: " + ed.to_side.join(", "));
+      edits.appendChild(el("span", null, `Sideboarded for this match · ${parts.join(" · ")}`));
+      edits.appendChild(el("span", "muted", "resets when the next match starts"));
+      const undo = el("button", "link", "undo all"); undo.type = "button"; undo.addEventListener("click", () => postDeck({ reset: true })); edits.appendChild(undo);
+    }
+    if (!dk) {
+      empty.textContent = ag.hint || (g ? "No deck submission in this log, so the library cannot be worked out." : "No deck or game in this log yet.");
+      if (ag.dek_error) empty.textContent += ` (${ag.dek_error})`;
+      $("pane-opp").hidden = !g;
+    }
     else {
       const total = dk.main_count || sum(dk.main);
       // what has left the library: deck minus remaining (when the server knows), else seen_mine
@@ -452,7 +491,10 @@
         else for (const c of (g.seen_mine || [])) left.set(c.name, c.n);
       }
       const inLib = dk.main.reduce((s, c) => s + Math.max(0, c.n - (left.get(c.name) || 0)), 0);
-      $("deck-note").textContent = lib ? `${inLib} of ${total} still in your library · cards below the dashed line have left it` : `${total} cards, as submitted`;
+      $("deck-note").textContent = lib
+        ? (mtgo ? `${inLib} of ${total} not yet seen this game · MTGO does not log your draws, so this is deck minus cards you have played`
+                : `${inLib} of ${total} still in your library · cards below the dashed line have left it`)
+        : `${total} cards${mtgo ? ", from the exported .dek" : ", as submitted"}`;
       const cols = new Map();
       for (const c of dk.main) { const i = info(c.name), k = i && i.group === "L" ? "L" : Math.min(7, Math.round(i ? i.cmc : 0)); if (!cols.has(k)) cols.set(k, []); cols.get(k).push(c); }
       const keys = [...cols.keys()].sort((a, b) => (a === "L") - (b === "L") || a - b);
@@ -463,14 +505,15 @@
           const out = left.get(c.name) || 0, remain = c.n - out;
           if (lib && remain <= 0) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", out > 1 ? `${out} out` : "out")); gone.appendChild(gc); continue; }
           const shown = lib ? remain : c.n, i = info(c.name);
-          if (i && i.image) { for (let k2 = 0; k2 < shown; k2++) stack.appendChild(cardFace(c.name, 1, null, false)); }
-          else stack.appendChild(cardFace(c.name, shown, lib && out ? `${out} out` : null, !(lib && out)));
-          if (lib && out && i && i.image) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", `${out} of ${c.n} out`)); gone.appendChild(gc); }
+          if (i && i.image) { for (let k2 = 0; k2 < shown; k2++) { const cf = cardFace(c.name, 1, null, false); draggable(cf, c.name, "main"); stack.appendChild(cf); } }
+          else { const cf = cardFace(c.name, shown, lib && out ? `${out} out` : null, !(lib && out)); draggable(cf, c.name, "main"); stack.appendChild(cf); }
+          if (lib && out && i && i.image) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", `${out} of ${c.n} out`)); draggable(gc, c.name, "main"); gone.appendChild(gc); }
         }
         col.appendChild(stack); if (gone.childNodes.length) col.appendChild(gone); curve.appendChild(col);
       }
       side.appendChild(el("span", "lbl", `Sideboard · ${dk.side_count || sum(dk.side)}`));
-      for (const c of dk.side) side.appendChild(chip(c.name, "side", c.n > 1 ? `${c.n}× ${c.name}` : c.name));
+      for (const c of dk.side) { const ch = chip(c.name, "side", c.n > 1 ? `${c.n}× ${c.name}` : c.name); draggable(ch, c.name, "side"); side.appendChild(ch); }
+      if (!dk.side.length) side.appendChild(el("span", "muted", "drop a card here to sideboard it out"));
       if (lib && g && g.unexpected && g.unexpected.length) {
         unexp.hidden = false; unexp.appendChild(el("span", null, "Seen this game but not in the submitted main deck:"));
         for (const c of g.unexpected) unexp.appendChild(chip(c.name, "warn", c.n > 1 ? `${c.n}× ${c.name}` : c.name));
@@ -481,11 +524,11 @@
     if (g) {
       $("opp-title").textContent = `${g.opponent || "Opponent"} has shown`;
       const theirs = g.seen_theirs || [], colors = [...new Set(theirs.flatMap((c) => (info(c.name) || {}).color_identity || []))];
-      $("opp-note").textContent = `${sum(theirs)} cards this match${colors.length ? " · colours " + colors.join(" ") : ""}`;
+      $("opp-note").textContent = `${sum(theirs)} cards this ${mtgo ? "game" : "match"}${colors.length ? " · colours " + colors.join(" ") : ""}`;
       const box = $("opp-cards"); clear(box);
       for (const c of theirs) { const t = tile(c.name, "lg"); if (c.n > 1) t.appendChild(el("span", "pickno", `×${c.n}`)); box.appendChild(t); }
     }
-    $("deck-foot").textContent = dk ? `Arena · deck submitted ${(dk.submitted_at || "").replace("T", " ")}${dk.event ? " · " + dk.event : ""}` : "";
+    $("deck-foot").textContent = dk ? `${mtgo ? "MTGO" : "Arena"} · ${dk.source || "deck"} · ${(dk.submitted_at || "").replace("T", " ")}${dk.event ? " · " + dk.event : ""}` : "";
   }
 
   // ------------------------------------------------------------ routing

@@ -87,6 +87,21 @@ or pass `--cube PATH_OR_URL`. A URL is fetched once and cached for a week. In
 `--arena` mode the 17Lands card list is used automatically. Without a list,
 only cards that have already appeared can be found.
 
+## Deck and games on MTGO
+
+MTGO never writes your registered deck to disk, so the Deck pane needs one
+step from you: after building, in MTGO's deck editor choose **Export** and
+save the `.dek` file into your draft log folder (the one in settings). The
+app picks up the newest `.dek` written after the draft started and shows it.
+
+During matches it reads MTGO's own match log: the turn, the score, your cards
+as you play them, and the opponent's cards as they show them. MTGO does not
+log draws, hands or life totals, so **Not yet seen** is your deck minus the
+cards you have played, not a true library count. Sideboarding is not logged
+either: drag a card between the deck and the sideboard row on the page to
+record it. The edit applies to the current match and is forgotten when the
+next match starts; **undo all** clears it sooner.
+
 ## MTG Arena
 
 The same tracker works for **Arena** drafts:
@@ -103,7 +118,7 @@ Arena-only printings. Arena does not log the pod, so the player count is
 inferred from the first pack that wheels back and shown as "assumed" until
 then. Use `--arena-log PATH` if your log lives somewhere unusual.
 
-**Deck pane (Arena only).** Once you submit a deck the pane shows your main
+**Deck pane.** Once you submit a deck the pane shows your main
 deck and sideboard. While a game is running it shows the turn, life totals,
 how many cards are in your library, and which cards are still in it, worked
 out as your deck minus every card of yours seen in hand, on the battlefield,

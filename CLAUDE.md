@@ -124,8 +124,15 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   minimal** (user decision 2026-09-24): a "Find a card" search box that
   answers seen / picked / not seen, plus a seen count. No state grids or
   filters; the user found that version bad. Keep it a lookup.
-- **Next: M5** match logs, after re-verifying the format markers in
-  DESIGN.md §2.3 against a current `Match_GameLog_*.dat`.
+- **MTGO deck + matches done** — `mtgo_deck.py` reads a `.dek` the user
+  exports into the draft-log folder (MTGO writes no decklist anywhere);
+  `matches.py` parses `Match_GameLog_*.dat` (format now verified: timestamped
+  binary records, DESIGN.md §2.3) for turns, cards shown and results. The
+  Deck pane serves both clients through one state (`arena_game`, with
+  `client`), and sideboarding is recorded by drag-and-drop on the page via
+  `POST /api/deck`, kept per match and reset when the match changes.
+  Whether MTGO writes the match log live or at match end is unverified.
+- **Next: M5** personal win rates and pod records from the match logs.
 
 The server is stdlib on purpose (one page, one stream, one local client); a
 framework has not earned its place yet. Revisit if the API grows.

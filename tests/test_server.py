@@ -540,6 +540,90 @@ def test_auto_mode_switches_source_in_state(tmp_path):
         s.stop()
 
 
+MTGO_MATCH = os.path.join(ROOT, "tests", "fixtures", "mtgo", "Match_GameLog_6fe35af5-8510-4cb0-a11d-0328e3823809.dat")
+DEK = """<?xml version="1.0" encoding="utf-8"?>
+<Deck><NetDeckID>0</NetDeckID>
+  <Cards CatID="1" Quantity="1" Sideboard="false" Name="Mox Diamond" />
+  <Cards CatID="2" Quantity="1" Sideboard="false" Name="Dark Ritual" />
+  <Cards CatID="3" Quantity="6" Sideboard="false" Name="Swamp" />
+  <Cards CatID="4" Quantity="1" Sideboard="true" Name="Never Played" />
+</Deck>"""
+
+
+def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
+    """A .dek exported into the log folder + the client's match log -> Deck pane data,
+    with drag-and-drop sideboarding recorded per match and reset when the match changes."""
+    from mtgo_draft_assistant import matches
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    _write(logs / LOG_NAME, FINAL, 1_700_000_000.0)          # draft Time: 9/21/2026 4:07:52 PM
+    draft_start = time.mktime(time.strptime("2026-09-21 16:07:52", "%Y-%m-%d %H:%M:%S"))
+    dek = logs / "my deck.dek"
+    dek.write_text(DEK, encoding="utf-8")
+    os.utime(dek, (draft_start + 1800, draft_start + 1800))     # exported after the draft
+    mdir = tmp_path / "matches"
+    mdir.mkdir()
+    monkeypatch.setattr(matches, "LOG_GLOB", str(mdir / "Match_GameLog_*.dat"))
+    m1 = mdir / "Match_GameLog_6fe35af5-8510-4cb0-a11d-0328e3823809.dat"
+    shutil.copyfile(MTGO_MATCH, m1)
+    os.utime(m1, (draft_start + 3600, draft_start + 3600))
+
+    s = DraftServer(logs, port=0, interval=0.05, config_path=tmp_path / "c.toml")
+    s.start()
+    try:
+        st = json.loads(_get(s.url + "api/state")[2])
+        ag = st["arena_game"]
+        assert ag["client"] == "mtgo"
+        assert ag["deck"]["main_count"] == 8 and ag["deck"]["side_count"] == 1
+        assert ag["deck"]["source"].startswith("my deck.dek")
+        g = ag["game"]
+        assert g["opponent"] == "jojo_lefou" and g["hero"] == "Wumpwumpwump" and g["score"] == "2-1" and g["over"]
+        assert g["library"] is None and g["life"] == {}
+        rem = {c["name"]: c["n"] for c in g["remaining"]}
+        assert "Mox Diamond" not in rem and rem["Swamp"] == 4 and rem["Dark Ritual"] == 1
+        assert any(c["name"] == "Mox Diamond" for c in g["seen_mine"])
+        assert ag["edits"] == {"to_main": [], "to_side": [], "active": False, "match": g["match_id"]}
+        # the deck's cards get Scryfall lookups requested like draft cards do
+        assert "Never Played" in st["cards"] or st["cards_pending"] >= 0
+
+        # sideboard: Never Played in, Dark Ritual out
+        code, res = _post(s.url + "api/deck", {"card": "Never Played", "to": "main"})
+        assert code == 200 and res["ok"] and res["edits"]["to_main"] == ["Never Played"] and res["main_count"] == 9
+        code, res = _post(s.url + "api/deck", {"card": "Dark Ritual", "to": "side"})
+        assert code == 200 and res["main_count"] == 8
+        st = json.loads(_get(s.url + "api/state")[2])
+        ag = st["arena_game"]
+        main = {c["name"]: c["n"] for c in ag["deck"]["main"]}; side = {c["name"]: c["n"] for c in ag["deck"]["side"]}
+        assert main.get("Never Played") == 1 and "Dark Ritual" not in main and side == {"Dark Ritual": 1}
+        rem = {c["name"]: c["n"] for c in ag["game"]["remaining"]}
+        assert rem.get("Never Played") == 1 and "Dark Ritual" not in rem
+        # moving it back undoes the edit rather than stacking a second one
+        code, res = _post(s.url + "api/deck", {"card": "Dark Ritual", "to": "main"})
+        assert code == 200 and res["edits"]["to_side"] == [] and res["edits"]["to_main"] == ["Never Played"]
+        # bad requests
+        code, res = _post(s.url + "api/deck", {"card": "Black Lotus", "to": "main"})
+        assert code == 400 and "not in the sideboard" in res["error"]
+        code, res = _post(s.url + "api/deck", {"card": "Never Played"})
+        assert code == 400
+
+        # a new match (newer log) resets the edits
+        m2 = mdir / "Match_GameLog_bbbbbbbb-0000-0000-0000-000000000000.dat"
+        shutil.copyfile(MTGO_MATCH, m2)
+        os.utime(m2, (draft_start + 7200, draft_start + 7200))
+        _post(s.url + "api/config", {"log_dir": str(logs)})      # any republish re-reads the match logs
+        st = json.loads(_get(s.url + "api/state")[2])
+        ag = st["arena_game"]
+        assert ag["edits"]["match"].startswith("bbbbbbbb") and ag["edits"]["active"] is False
+        assert {c["name"]: c["n"] for c in ag["deck"]["side"]} == {"Never Played": 1}
+        # reset endpoint
+        _post(s.url + "api/deck", {"card": "Never Played", "to": "main"})
+        code, res = _post(s.url + "api/deck", {"reset": True})
+        assert code == 200 and res["edits"]["active"] is False
+    finally:
+        s.stop()
+
+
 def _post(url: str, payload: dict) -> tuple[int, dict]:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode("utf-8"), method="POST",

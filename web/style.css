@@ -218,7 +218,14 @@ button.link:hover { color: #dcc5f5; }
 .gone { display: flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 4px; margin-top: 3px; background: #2a272f; color: var(--fg-2); cursor: default; }
 .gone .n { flex: 1; min-width: 40px; font-size: 9.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gone .z { font: 600 8.5px var(--mono); padding: 0 4px; border-radius: 2px; background: var(--bg); color: var(--fg-2); flex: 0 0 auto; }
-.sideline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.sideline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; min-height: 34px; padding: 4px 6px; border-radius: 6px; border: 1px dashed transparent; }
+/* drag-and-drop sideboarding */
+.card[draggable=true], .chip[draggable=true], .gone[draggable=true] { cursor: grab; }
+.curve.over, .sideline.over { border: 1px dashed var(--accent); background: rgba(199,164,236,.06); }
+.curve { padding: 4px; border-radius: 6px; border: 1px dashed transparent; min-height: 60px; }
+.edits { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--gold); }
+.edits .muted { color: var(--muted); }
+.edits button.link { font-size: 12px; }
 .sideline .lbl { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
 .unexpected { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--gold); }
 .unexpected .muted { color: var(--muted); }

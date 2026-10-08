@@ -18,7 +18,9 @@ def _never_touch_the_real_config(tmp_path, monkeypatch):
     config.toml. Point that default at a temp directory for every test so
     no test can overwrite the user's real configuration.
     """
-    from mtgo_draft_assistant import config
+    from mtgo_draft_assistant import config, matches
     monkeypatch.setattr(config, "REPO_ROOT", tmp_path / "repo")
     (tmp_path / "repo").mkdir(exist_ok=True)
     monkeypatch.chdir(tmp_path)
+    # and never read this machine's real MTGO match logs
+    monkeypatch.setattr(matches, "LOG_GLOB", str(tmp_path / "no-match-logs" / "Match_GameLog_*.dat"))
