@@ -559,20 +559,31 @@ def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
     logs.mkdir()
     _write(logs / LOG_NAME, FINAL, 1_700_000_000.0)          # draft Time: 9/21/2026 4:07:52 PM
     draft_start = time.mktime(time.strptime("2026-09-21 16:07:52", "%Y-%m-%d %H:%M:%S"))
-    dek = logs / "my deck.dek"
-    dek.write_text(DEK, encoding="utf-8")
-    os.utime(dek, (draft_start + 1800, draft_start + 1800))     # exported after the draft
     mdir = tmp_path / "matches"
     mdir.mkdir()
     monkeypatch.setattr(matches, "LOG_GLOB", str(mdir / "Match_GameLog_*.dat"))
-    m1 = mdir / "Match_GameLog_6fe35af5-8510-4cb0-a11d-0328e3823809.dat"
-    shutil.copyfile(MTGO_MATCH, m1)
-    os.utime(m1, (draft_start + 3600, draft_start + 3600))
 
     s = DraftServer(logs, port=0, interval=0.05, config_path=tmp_path / "c.toml")
     s.start()
     try:
-        st = json.loads(_get(s.url + "api/state")[2])
+        # nothing exported yet: no Deck pane at all
+        assert json.loads(_get(s.url + "api/state")[2])["arena_game"] is None
+
+        # the user exports the deck while the draft log is quiet; the page must pick
+        # it up without waiting for another pick (real report, 2026-10-10)
+        dek = logs / "my deck.dek"
+        dek.write_text(DEK, encoding="utf-8")
+        os.utime(dek, (draft_start + 1800, draft_start + 1800))     # exported after the draft
+        st = _wait_state(s, lambda st: (st["arena_game"] or {}).get("deck"))
+        ag = st["arena_game"]
+        assert ag["client"] == "mtgo" and ag["game"] is None
+        assert ag["deck"]["main_count"] == 8 and ag["deck"]["side_count"] == 1
+
+        # then the client writes a match log, equally unprompted
+        m1 = mdir / "Match_GameLog_6fe35af5-8510-4cb0-a11d-0328e3823809.dat"
+        shutil.copyfile(MTGO_MATCH, m1)
+        os.utime(m1, (draft_start + 3600, draft_start + 3600))
+        st = _wait_state(s, lambda st: (st["arena_game"] or {}).get("game"))
         ag = st["arena_game"]
         assert ag["client"] == "mtgo"
         assert ag["deck"]["main_count"] == 8 and ag["deck"]["side_count"] == 1
@@ -611,8 +622,7 @@ def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
         m2 = mdir / "Match_GameLog_bbbbbbbb-0000-0000-0000-000000000000.dat"
         shutil.copyfile(MTGO_MATCH, m2)
         os.utime(m2, (draft_start + 7200, draft_start + 7200))
-        _post(s.url + "api/config", {"log_dir": str(logs)})      # any republish re-reads the match logs
-        st = json.loads(_get(s.url + "api/state")[2])
+        st = _wait_state(s, lambda st: (st["arena_game"]["edits"]["match"] or "").startswith("bbbbbbbb"))
         ag = st["arena_game"]
         assert ag["edits"]["match"].startswith("bbbbbbbb") and ag["edits"]["active"] is False
         assert {c["name"]: c["n"] for c in ag["deck"]["side"]} == {"Never Played": 1}
@@ -622,6 +632,18 @@ def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
         assert code == 200 and res["edits"]["active"] is False
     finally:
         s.stop()
+
+
+def _wait_state(s, ready, timeout: float = 5.0) -> dict:
+    """Poll /api/state until ``ready(state)`` is truthy; return that state."""
+    deadline = time.time() + timeout
+    while True:
+        st = json.loads(_get(s.url + "api/state")[2])
+        if ready(st):
+            return st
+        if time.time() > deadline:
+            raise AssertionError(f"state never became ready; arena_game={st.get('arena_game')!r}")
+        time.sleep(0.05)
 
 
 def _post(url: str, payload: dict) -> tuple[int, dict]:

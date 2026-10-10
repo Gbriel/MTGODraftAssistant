@@ -338,20 +338,32 @@ class MatchWatcher:
         self._match: MatchLog | None = None
         self.hero: str | None = None
 
-    def match(self, after: datetime | None) -> MatchLog | None:
+    def _current(self, after: datetime | None) -> tuple[Path, int, int] | None:
         path = newest_match_after(after, self.pattern)
         if path is None:
-            self._stamp, self._match = None, None
             return None
         try:
             st = path.stat()
         except OSError:
+            return self._stamp
+        return (path, st.st_size, st.st_mtime_ns)
+
+    def changed(self, after: datetime | None) -> bool:
+        """True when ``match()`` would now read a different file or version
+        (including a log appearing or disappearing). Only stats, never reads."""
+        return self._current(after) != self._stamp
+
+    def match(self, after: datetime | None) -> MatchLog | None:
+        stamp = self._current(after)
+        if stamp is None:
+            self._stamp, self._match = None, None
+            return None
+        if stamp == self._stamp:
             return self._match
-        stamp = (path, st.st_size, st.st_mtime_ns)
-        if stamp != self._stamp:
-            try:
-                self._match = parse_match(path.read_bytes(), match_id_of(path), path)
-            except OSError:
-                return self._match
-            self._stamp = stamp
+        path = stamp[0]
+        try:
+            self._match = parse_match(path.read_bytes(), match_id_of(path), path)
+        except OSError:
+            return self._match
+        self._stamp = stamp
         return self._match

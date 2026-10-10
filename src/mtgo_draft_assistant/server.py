@@ -942,9 +942,33 @@ class DraftServer:
             target=self.httpd.serve_forever, kwargs={"poll_interval": 0.25},
             name="draft-http", daemon=True,
         )
-        self._threads = [t_watch, t_http]
+        t_side = threading.Thread(target=self._watch_side_inputs, name="deck-watcher", daemon=True)
+        self._threads = [t_watch, t_http, t_side]
         for t in self._threads:
             t.start()
+
+    def _watch_side_inputs(self) -> None:
+        """
+        The draft watcher only republishes when the draft log changes. An MTGO
+        deck is exported by hand and the match logs are written by the client
+        long after the log went quiet, so poll those two for changes (a stat
+        each, no reads) and republish when one appears or is rewritten.
+        """
+        while not self._stop.wait(max(self.interval, 0.25)):
+            with self._last_lock:
+                last = self._last
+            if last is None:
+                continue
+            update, _ = last
+            if self._active_source(update) != "mtgo":
+                continue
+            started = draft_started_at(update.draft.timestamp)
+            try:
+                if self.dek.changed(started) or self.matches.changed(started):
+                    self._republish()
+            except Exception as e:  # noqa: BLE001 - never let a side input kill the poller
+                if self.verbose:
+                    print(f"deck/match poll: {e}", flush=True)
 
     def stop(self) -> None:
         self._stop.set()

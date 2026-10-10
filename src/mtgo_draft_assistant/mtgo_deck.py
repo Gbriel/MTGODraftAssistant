@@ -129,22 +129,34 @@ class DekWatcher:
         self._stamp = None
         self._deck = None
 
-    def deck(self, after: datetime | None = None) -> DekDeck | None:
+    def _current(self, after: datetime | None) -> tuple[Path, int, int] | None:
         path = find_dek(self.folder, after)
         if path is None:
-            self._stamp, self._deck = None, None
             return None
         try:
             st = path.stat()
         except OSError:
+            return self._stamp
+        return (path, st.st_size, st.st_mtime_ns)
+
+    def changed(self, after: datetime | None = None) -> bool:
+        """True when ``deck()`` would now read a different file or version
+        (including the file appearing or disappearing). Only stats, never reads."""
+        return self._current(after) != self._stamp
+
+    def deck(self, after: datetime | None = None) -> DekDeck | None:
+        stamp = self._current(after)
+        if stamp is None:
+            self._stamp, self._deck = None, None
+            return None
+        if stamp == self._stamp:
             return self._deck
-        stamp = (path, st.st_size, st.st_mtime_ns)
-        if stamp != self._stamp:
-            try:
-                self._deck = load_dek(path)
-                self.error = None
-            except (OSError, ET.ParseError) as e:
-                self.error = f"{path.name}: {e}"
-                self._deck = None
-            self._stamp = stamp
+        path = stamp[0]
+        try:
+            self._deck = load_dek(path)
+            self.error = None
+        except (OSError, ET.ParseError) as e:
+            self.error = f"{path.name}: {e}"
+            self._deck = None
+        self._stamp = stamp
         return self._deck
