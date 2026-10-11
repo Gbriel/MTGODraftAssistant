@@ -657,7 +657,8 @@ class DraftServer:
         if view:
             fields = {k: view[k] for k in ("match_id", "game_number", "stage", "over", "turn", "my_seat",
                                            "opponent", "life", "library", "seat_known")}
-            fields.update({"score": view["score"], "games": view["games"], "hero": view["hero"]})
+            fields.update({"score": view["score"], "games": view["games"], "hero": view["hero"],
+                           "shown_theirs": view["shown_theirs"], "last_mine": view["last_mine"]})
         return self._finish_game_state(
             "mtgo", deck_info, main if dek else None, side if dek else None, fields,
             Counter(view["seen_mine"]) if view else None, Counter(view["seen_theirs"]) if view else None,

@@ -172,3 +172,97 @@ def test_watcher_follows_the_newest_log_after_the_draft(tmp_path):
 
 
 MATCH_BYTES = open(MATCH, "rb").read()
+
+
+# -- attribution rules (DESIGN.md §2.3; measured over 2,521 real logs) --------------
+
+from mtgo_draft_assistant import matches as M  # noqa: E402
+
+
+def _ref(name: str, inst: int) -> str:
+    return f"@[{name}@:{1000 + inst},{inst}:@]"
+
+
+def _game(*lines: str) -> M.GameLog:
+    g = M.GameLog(number=1, players=["A", "B"])
+    for line in lines:
+        M._attribute(g, line)
+    return g
+
+
+def _names(g: M.GameLog, who: str) -> set[str]:
+    return set(g.seen.get(who, {}).values())
+
+
+def test_targets_instruments_and_both_player_draws_are_not_attributed():
+    g = _game(
+        f"A casts {_ref('Lightning Bolt', 1)} targeting {_ref('Grizzly Bears', 2)}.",
+        f"A draws seven cards with {_ref('Timetwister', 3)}.",
+        f"A puts a +1/+1 counter on {_ref('Grizzly Bears', 2)}.",
+        f"A chooses to use {_ref('Overlord', 4)}'s ability.",
+        f"A reveals 3 cards with {_ref('Thoughtseize', 5)}: {_ref('P', 6)}, {_ref('Q', 7)}, and {_ref('R', 8)}.",
+        f"A reveals their hand to {_ref('Duress', 9)}'s ability, containing {_ref('S', 10)} and {_ref('T', 11)}.",
+        f"A puts {_ref('Titania', 12)} on top of their library with {_ref('Subtlety', 13)}'s ability.",
+    )
+    assert _names(g, "A") == {"Lightning Bolt", "P", "Q", "R", "S", "T", "Titania"}
+    assert _names(g, "B") == set()
+    assert g.last["A"]["P"] == M.EV_REVEALED and g.last["A"]["Titania"] == M.EV_TO_LIBRARY
+
+
+def test_attackers_belong_to_the_other_player_including_two_line_records():
+    g = _game(
+        f"B is being attacked by {_ref('Grizzly Bears', 1)} and {_ref('Goblin Guide', 2)}",
+        f"B is being attacked by {_ref('Boo', 3)}\nB's {_ref('Liliana of the Veil', 4)} is being attacked by {_ref('Headliner Scarlett', 5)}",
+    )
+    assert _names(g, "A") == {"Grizzly Bears", "Goblin Guide", "Boo", "Headliner Scarlett"}
+    assert _names(g, "B") == {"Liliana of the Veil"}
+    assert g.last["A"]["Boo"] == M.EV_ATTACKING and g.last["B"]["Liliana of the Veil"] == M.EV_BATTLEFIELD
+
+
+def test_library_to_graveyard_moves_and_abilities():
+    g = _game(
+        f"A casts {_ref('Wheel of Fortune', 1)}.",
+        f"A puts triggered ability from {_ref('Wheel of Fortune', 2)} onto the stack (Whenever you draw with X, do Y.).",
+        f"A activates an ability of {_ref('Wishclaw Talisman', 3)} ( Search your library for a card with mana value 2.).",
+        f"A puts {_ref('Brainstorm', 4)} into their graveyard.",
+        f"A mills {_ref('X', 5)}, {_ref('Y', 6)}, and {_ref('Z', 7)}.",
+        f"A puts {_ref('Hasty Thing', 8)} onto the battlefield attacking B",
+    )
+    assert _names(g, "A") == {"Wheel of Fortune", "Wishclaw Talisman", "Brainstorm", "X", "Y", "Z", "Hasty Thing"}
+    last = g.last["A"]
+    assert last["Wheel of Fortune"] == M.EV_CAST                 # an ability never overrides a real event
+    assert last["Wishclaw Talisman"] == M.EV_ABILITY
+    assert last["Brainstorm"] == M.EV_TO_GRAVEYARD and last["Y"] == M.EV_MILLED and last["Hasty Thing"] == M.EV_BATTLEFIELD
+
+
+def test_exile_bounce_and_counter_only_update_known_cards():
+    g = _game(
+        f"A casts {_ref('Grizzly Bears', 1)}.",
+        f"B casts {_ref('Big Spell', 2)}.",
+        f"B exiles {_ref('Grizzly Bears', 3)} with with {_ref('Swords to Plowshares', 4)}'s ability.",
+        f"A counters {_ref('Big Spell', 5)} with {_ref('Force of Will', 6)}.",
+        f"A returns {_ref('Unknown Creature', 7)} to its owner's hand with {_ref('Reprieve', 8)}.",
+        f"B's {_ref('Skyclave Apparition', 9)} creates an Illusion Token under B's control.",
+        f"A's {_ref('Thopter Foundry', 10)} creates a Thopter Token.",
+    )
+    assert g.last["A"]["Grizzly Bears"] == M.EV_EXILED and g.last["B"]["Big Spell"] == M.EV_COUNTERED
+    assert "Swords to Plowshares" not in _names(g, "A") | _names(g, "B")
+    assert "Force of Will" not in _names(g, "A")                 # cast earlier in a real log; the "with" is not proof
+    assert "Unknown Creature" not in _names(g, "A") | _names(g, "B")
+    assert g.last["A"]["Reprieve"] == M.EV_ABILITY               # bouncing card: measured safe
+    assert "Skyclave Apparition" not in _names(g, "B")           # the possessive names the token's recipient
+    assert g.last["A"]["Thopter Foundry"] == M.EV_BATTLEFIELD
+
+
+def test_shown_in_match_spans_games_with_last_event():
+    m = parse_match(MATCH_BYTES, "6fe35af5")
+    v = match_view(m, "Wumpwumpwump", None)
+    shown = {e["name"]: e for e in v["shown_theirs"]}
+    assert len(shown) == 25 and sum(e["current"] for e in shown.values()) == 11
+    assert "Duress" not in shown                                 # the hero's: "opp reveals 3 cards with Duress: ..."
+    assert shown["Fractured Identity"] == {"name": "Fractured Identity", "n": 1, "last": "milled", "game": 1, "current": False}
+    assert shown["Plains"]["n"] == 5 and shown["Plains"]["current"]
+    assert shown["Badgermole Cub"]["last"] == M.EV_ATTACKING
+    assert v["shown_theirs"][0]["current"] and not v["shown_theirs"][-1]["current"]
+    assert v["last_mine"]["Xander's Lounge"] == M.EV_DISCARDED and v["last_mine"]["Mox Diamond"] == M.EV_CAST
+    assert "Blood Token" not in shown

@@ -491,6 +491,11 @@
         else for (const c of (g.seen_mine || [])) left.set(c.name, c.n);
       }
       const inLib = dk.main.reduce((s, c) => s + Math.max(0, c.n - (left.get(c.name) || 0)), 0);
+      const how = (g && g.last_mine) || {};            // MTGO: how a card of mine was last seen
+      const outTag = (name, out, total) => {
+        const count = total ? `${out} of ${total}` : out > 1 ? `${out}` : "";
+        return how[name] ? (count ? `${count} · ${how[name]}` : how[name]) : (count ? `${count} out` : "out");
+      };
       $("deck-note").textContent = lib
         ? (mtgo ? `${inLib} of ${total} not yet seen this game · MTGO does not log your draws, so this is deck minus cards you have played`
                 : `${inLib} of ${total} still in your library · cards below the dashed line have left it`)
@@ -503,11 +508,11 @@
         const stack = el("div", "stack"), gone = el("div", "gone-list");
         for (const c of cols.get(k).slice().sort((a, b) => a.name.localeCompare(b.name))) {
           const out = left.get(c.name) || 0, remain = c.n - out;
-          if (lib && remain <= 0) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", out > 1 ? `${out} out` : "out")); gone.appendChild(gc); continue; }
+          if (lib && remain <= 0) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", outTag(c.name, out, 0))); gone.appendChild(gc); continue; }
           const shown = lib ? remain : c.n, i = info(c.name);
           if (i && i.image) { for (let k2 = 0; k2 < shown; k2++) { const cf = cardFace(c.name, 1, null, false); draggable(cf, c.name, "main"); stack.appendChild(cf); } }
-          else { const cf = cardFace(c.name, shown, lib && out ? `${out} out` : null, !(lib && out)); draggable(cf, c.name, "main"); stack.appendChild(cf); }
-          if (lib && out && i && i.image) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", `${out} of ${c.n} out`)); draggable(gc, c.name, "main"); gone.appendChild(gc); }
+          else { const cf = cardFace(c.name, shown, lib && out ? outTag(c.name, out, 0) : null, !(lib && out)); draggable(cf, c.name, "main"); stack.appendChild(cf); }
+          if (lib && out && i && i.image) { const gc = el("div", "gone"); gc.dataset.card = c.name; gc.appendChild(el("span", "n", c.name)); gc.appendChild(el("span", "z", outTag(c.name, out, c.n))); draggable(gc, c.name, "main"); gone.appendChild(gc); }
         }
         col.appendChild(stack); if (gone.childNodes.length) col.appendChild(gone); curve.appendChild(col);
       }
@@ -523,10 +528,23 @@
     }
     if (g) {
       $("opp-title").textContent = `${g.opponent || "Opponent"} has shown`;
-      const theirs = g.seen_theirs || [], colors = [...new Set(theirs.flatMap((c) => (info(c.name) || {}).color_identity || []))];
-      $("opp-note").textContent = `${sum(theirs)} cards this ${mtgo ? "game" : "match"}${colors.length ? " · colours " + colors.join(" ") : ""}`;
       const box = $("opp-cards"); clear(box);
-      for (const c of theirs) { const t = tile(c.name, "lg"); if (c.n > 1) t.appendChild(el("span", "pickno", `×${c.n}`)); box.appendChild(t); }
+      // MTGO: the whole match, each card tagged with how it was last seen (not its zone: MTGO
+      // never logs a permanent leaving the battlefield). Arena: this game's seen list.
+      const shown = g.shown_theirs;
+      const theirs = shown || g.seen_theirs || [], colors = [...new Set(theirs.flatMap((c) => (info(c.name) || {}).color_identity || []))];
+      if (shown) {
+        const now = shown.filter((c) => c.current), before = shown.filter((c) => !c.current);
+        const games = (g.games || []).length;
+        $("opp-note").textContent = `${sum(shown)} cards across ${games} game${games === 1 ? "" : "s"} · ${sum(now)} this game${colors.length ? " · colours " + colors.join(" ") : ""}`;
+        const addTiles = (list) => { for (const c of list) { const t = tile(c.name, "lg", c.current ? "" : "prev"); if (c.n > 1) t.appendChild(el("span", "pickno", `×${c.n}`)); if (c.last) t.appendChild(el("span", "ev", c.last)); box.appendChild(t); } };
+        if (now.length) { box.appendChild(el("div", "lbl wide", `This game · ${sum(now)}`)); addTiles(now); }
+        if (before.length) { box.appendChild(el("div", "lbl wide", `Earlier games only · ${sum(before)}`)); addTiles(before); }
+        box.appendChild(el("div", "muted wide small", "The tag is the last thing the log said about the card. MTGO never logs a creature dying or a permanent being destroyed, so \"cast\" or \"on battlefield\" may be in the graveyard by now."));
+      } else {
+        $("opp-note").textContent = `${sum(theirs)} cards this match${colors.length ? " · colours " + colors.join(" ") : ""}`;
+        for (const c of theirs) { const t = tile(c.name, "lg"); if (c.n > 1) t.appendChild(el("span", "pickno", `×${c.n}`)); box.appendChild(t); }
+      }
     }
     $("deck-foot").textContent = dk ? `${mtgo ? "MTGO" : "Arena"} · ${dk.source || "deck"} · ${(dk.submitted_at || "").replace("T", " ")}${dk.event ? " · " + dk.event : ""}` : "";
   }

@@ -11,11 +11,32 @@ DESIGN.md §2.3): a header, then one record per game-log line:
 
 Card references inside the text look like ``@[Name@:catalogId,instanceId:@]``.
 Lines name a card only when it becomes public (played, cast, discarded,
-revealed, fetched); your own draws are "draws a card" with no name, and
-there are no life totals. The last line of a match is "X wins the match 2-1".
+revealed, milled, fetched); your own draws are "draws a card" with no name,
+and there are no life totals. The last line of a match is "X wins the match 2-1".
 
-What this gives a tracker: whose turn it is, cards each player has shown,
-game and match results. It cannot give your hand or library; "still in
+**Nothing logs a card leaving the battlefield.** Measured over 2,521 real logs
+(2026-10-11): no "dies", "is destroyed", damage or combat-death line exists.
+"X puts [card] into their graveyard" is surveil and similar library-to-
+graveyard moves only. So a tracker can say how a card was last seen (cast,
+milled, exiled, bounced...) but never which zone it is in now.
+
+Who owns a named card is decided per line shape, from the same corpus (share
+of lines where the card was cast or played by the acting player elsewhere in
+the match): casts/plays/discards/cycles/sacrifices 100%, "puts triggered
+ability from" 99%, "activates an ability of" 99%, "reveals" 99%, "mills" 94%,
+"puts [card] into their graveyard" 95%, "P's [card]" 99%; "P is being
+attacked by [cards]" names the *other* player's cards 98.6% of the time. The
+first card of "exiles ... with", "returns ... to its owner's hand with" and
+"counters ... with" is a coin flip, so those lines only update the last event
+of a card whose owner is already known. Rules rejected by measurement are
+listed next to OWN_RULES. Result over the corpus: 0.6% of attributions
+contradict cast/play evidence (stolen permanents, constructed decks sharing
+a card), and 10% of attributed cards were never cast or played by anyone -
+milled, surveiled, revealed, fetched, attacking tokens' makers - which the
+cast/play rules alone would miss.
+
+What this gives a tracker: whose turn it is, cards each player has shown and
+how, game and match results. It cannot give your hand or library; "still in
 your library" is therefore the exported deck minus the cards of yours seen
 so far, and it is blind to sideboarding unless the user tells the app.
 
@@ -43,10 +64,46 @@ OPENING = re.compile(r"^(.+?) (?:puts? .*? and )?begins the game with (\w+) card
 WINS_GAME = re.compile(r"^(.+?) wins the game\.?$")
 WINS_MATCH = re.compile(r"^(.+?) wins the match (\d+)-(\d+)")
 CONCEDE = re.compile(r"^(.+?) has conceded")
-# verbs after which the first card reference is the subject's own card
-OWN_VERBS = ("plays", "casts", "discards", "reveals", "cycles", "activates an ability of",
-             "puts a triggered ability from", "exiles", "sacrifices", "returns", "attacks with")
 WORDS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+
+# How a card was last seen. Not a zone: MTGO never logs a permanent leaving the
+# battlefield (see the module docstring), so "cast" may well be dead by now.
+EV_CAST, EV_PLAYED, EV_DISCARDED, EV_CYCLED, EV_SACRIFICED = "cast", "played", "discarded", "cycled", "sacrificed"
+EV_MILLED, EV_TO_GRAVEYARD, EV_EXILED, EV_BOUNCED, EV_TO_LIBRARY = "milled", "to graveyard", "exiled", "bounced", "to library"
+EV_REVEALED, EV_BATTLEFIELD, EV_ATTACKING, EV_COUNTERED, EV_ABILITY = "revealed", "on battlefield", "attacking", "countered", "ability"
+
+# (verb the line starts with after "P ", event) - the acting player's own card(s):
+# every reference before any " with ", " into ", " onto ", " targeting " or " beneath ".
+# Order matters: longer prefixes first where one is a prefix of another.
+OWN_RULES: tuple[tuple[str, str], ...] = (
+    ("casts ability from ", EV_ABILITY),
+    ("casts ", EV_CAST),
+    ("plays ", EV_PLAYED),
+    ("discards ", EV_DISCARDED),
+    ("cycles ", EV_CYCLED),
+    ("sacrifices ", EV_SACRIFICED),
+    ("mills ", EV_MILLED),
+    ("reveals ", EV_REVEALED),
+    ("activates an ability of ", EV_ABILITY),
+    ("puts triggered ability from ", EV_ABILITY),
+    ("puts a triggered ability from ", EV_ABILITY),
+)
+# Not rules, on purpose (measured): "draws N cards with [card]" - both players
+# draw off a Timetwister; "puts a counter on [card]" - stun counters go on the
+# other side; "chooses to use [card]'s ability" - 7% wrong; the "with [card]"
+# of a reveal - Oath of Druids is yours, the Duress making you reveal is not.
+# "P puts [card] <where>": the card is P's, the event depends on the destination
+PUTS_DEST = ((" into their graveyard", EV_TO_GRAVEYARD), (" onto the battlefield", EV_BATTLEFIELD),
+             (" beneath ", EV_TO_LIBRARY), (" on top of ", EV_TO_LIBRARY), (" on the bottom of ", EV_TO_LIBRARY),
+             (" on the top of ", EV_TO_LIBRARY))
+# first card(s) of these lines may belong to either player: only update a known card's event
+EITHER_RULES: tuple[tuple[str, str], ...] = (
+    ("exiles ", EV_EXILED),
+    ("returns ", EV_BOUNCED),                     # "returns [card] to its owner's hand with [card]"
+    ("counters ", EV_COUNTERED),
+)
+SPLIT_WORDS = (" with ", " into ", " onto ", " targeting ", " beneath ", " on top of ", " on the bottom of ",
+               " on the top of ", " to its owner's hand", " to the battlefield", ":")
 
 
 @dataclass
@@ -113,8 +170,10 @@ class GameLog:
     winner: str | None = None
     first: str | None = None
     hand_sizes: dict[str, int] = field(default_factory=dict)
-    # cards seen per player: instance id -> name (a permanent keeps its id across zones)
+    # cards seen per player: instance id -> name (a card gets a new id per zone change)
     seen: dict[str, dict[int, str]] = field(default_factory=dict)
+    # per player: card name -> how it was last seen (an EV_* string, not a zone)
+    last: dict[str, dict[str, str]] = field(default_factory=dict)
     started_at: datetime | None = None
 
 
@@ -181,17 +240,134 @@ def parse_match(b: bytes, match_id: str = "", path: Path | None = None) -> Match
             others = [p for p in game.players if p != mc.group(1)]
             game.winner = others[0] if len(others) == 1 else None
             continue
-        # a card becoming public: the first reference after an owning verb
-        refs = list(CARD_REF.finditer(raw))
-        if not refs:
-            continue
-        for who in game.players:
-            prefix = who + " "
-            if raw.startswith(prefix) and any(raw[len(prefix):].startswith(v) for v in OWN_VERBS):
-                r = refs[0]
-                game.seen.setdefault(who, {})[int(r.group("inst"))] = r.group("name")
-                break
+        if CARD_REF.search(raw):
+            _attribute(game, raw)
     return m
+
+
+# -- who a named card belongs to, and how it was last seen ----------------------
+
+
+def _record(game: GameLog, who: str, ref: re.Match, event: str, *, update_only: bool = False) -> None:
+    name = ref.group("name")
+    last = game.last.setdefault(who, {})
+    if update_only:
+        if name in last:
+            last[name] = event
+        return
+    game.seen.setdefault(who, {}).setdefault(int(ref.group("inst")), name)
+    # an ability can be used from any zone, so it never overrides a real event
+    if event != EV_ABILITY or name not in last:
+        last[name] = event
+
+
+def _subject_end(masked: str, start: int) -> int:
+    """Where the line's subject ends: the first split word at or after ``start``."""
+    end = len(masked)
+    for w in SPLIT_WORDS + (" (",):
+        i = masked.find(w, start)
+        if 0 <= i < end:
+            end = i
+    return end
+
+
+def _after_with(game: GameLog, who: str, raw: str, masked: str, rest: int, event: str,
+                credit_instrument: bool = False) -> None:
+    """
+    The tail of a line after its subject. ``with [card]`` is the instrument:
+    credited to the acting player only where measured safe (``credit_instrument``).
+    ``: [a], [b]`` after it lists more of the acting player's own cards
+    ("reveals 3 cards with Thoughtseize: ...": the revealer's hand).
+    """
+    tail = masked[rest:]
+    i, p = tail.find(" with "), tail.find(" (")
+    if i < 0 or 0 <= p < i:                      # no "with", or only inside an ability's text
+        return
+    rest += i
+    refs = list(CARD_REF.finditer(raw, rest))
+    if not refs:
+        return
+    colon = masked.find(":", rest)
+    if colon >= 0:
+        for r in refs:
+            if r.start() > colon:
+                _record(game, who, r, event)
+        refs = [r for r in refs if r.start() < colon]
+    if refs and credit_instrument:
+        _record(game, who, refs[0], EV_ABILITY)
+
+
+def _attribute(game: GameLog, raw: str) -> None:
+    """Apply the line-shape rules in the module docstring to one record."""
+    if "\n" in raw:                 # a combat record can hold two lines ("B is being attacked by X" + "B's Y is being attacked by Z")
+        for line in raw.split("\n"):
+            if CARD_REF.search(line):
+                _attribute(game, line.strip())
+        return
+    players = game.players
+    masked = CARD_REF.sub(lambda mm: "\0" * (mm.end() - mm.start()), raw)
+    for who in players:
+        other = next((p for p in players if p != who), None) if len(players) == 2 else None
+        if masked.startswith(who + "'s "):
+            start = len(who) + 3
+            plain = masked[start:].split(" (", 1)[0]
+            # "P's Skyclave Apparition creates an Illusion Token under P's control": the
+            # possessive is the token's recipient, not the card's owner. Skip those.
+            if " under " in plain and "'s control" in plain:
+                return
+            attacked = masked.find(" is being attacked by ", start)
+            end = min(_subject_end(masked, start), attacked if attacked >= 0 else len(masked))
+            own = list(CARD_REF.finditer(raw, start, end))
+            if own:
+                _record(game, who, own[0], EV_BATTLEFIELD)       # "P's [card] creates / is being attacked by"
+            if other is not None and attacked >= 0:
+                for r in CARD_REF.finditer(raw, attacked):
+                    _record(game, other, r, EV_ATTACKING)
+            return
+        if not masked.startswith(who + " "):
+            continue
+        start = len(who) + 1
+        body = masked[start:]
+        if body.startswith("is being attacked by "):
+            if other is not None:
+                for r in CARD_REF.finditer(raw, start):
+                    _record(game, other, r, EV_ATTACKING)
+            return
+        if body.startswith("reveals their hand to "):
+            # "... to [Duress]('s ability), containing [a], [b]": the hand is the revealer's,
+            # the card making them reveal is not
+            i = masked.find(", containing ", start)
+            if i >= 0:
+                for r in CARD_REF.finditer(raw, i):
+                    _record(game, who, r, EV_REVEALED)
+            return
+        for verb, event in OWN_RULES:
+            if body.startswith(verb):
+                end = _subject_end(masked, start + len(verb))
+                for r in CARD_REF.finditer(raw, start + len(verb), end):
+                    _record(game, who, r, event)
+                _after_with(game, who, raw, masked, end, event)
+                return
+        if body.startswith("puts "):
+            plain = body.split(" (", 1)[0]
+            for phrase, event in PUTS_DEST:
+                i = plain.find(phrase)
+                if i >= 0:
+                    for r in CARD_REF.finditer(raw, start + 5, start + i):
+                        _record(game, who, r, event)
+                    return
+            return
+        for verb, event in EITHER_RULES:
+            if body.startswith(verb):
+                end = _subject_end(masked, start + len(verb))
+                for r in CARD_REF.finditer(raw, start + len(verb), end):
+                    _record(game, who, r, event, update_only=True)
+                    if other is not None:
+                        _record(game, other, r, event, update_only=True)
+                # the bouncing card is the actor's (measured 99%); the exiling or countering one is not safe
+                _after_with(game, who, raw, masked, end, event, credit_instrument=(verb == "returns "))
+                return
+        return
 
 
 # -- the view the Deck pane shows ---------------------------------------------
@@ -226,6 +402,29 @@ def seen_counts(game: GameLog, who: str | None) -> Counter:
         else:
             out[name] = 1
     return out
+
+
+def shown_in_match(m: MatchLog, who: str | None) -> list[dict]:
+    """
+    Every card of ``who`` seen anywhere in the match, one entry per name:
+    ``n`` (the most copies seen in one game), ``last`` (how it was last seen),
+    ``game`` (the latest game it appeared in) and ``current`` (seen in the game
+    on screen). Sorted: this game's cards first, then by name.
+    """
+    if who is None or not m.games:
+        return []
+    cur = m.current
+    out: dict[str, dict] = {}
+    for g in m.games:
+        counts = seen_counts(g, who)
+        last = g.last.get(who, {})
+        for name, n in counts.items():
+            e = out.setdefault(name, {"name": name, "n": 0, "last": None, "game": g.number, "current": False})
+            e["n"] = max(e["n"], n)
+            e["game"] = g.number
+            e["last"] = last.get(name)
+            e["current"] = g is cur
+    return sorted(out.values(), key=lambda e: (not e["current"], e["name"]))
 
 
 def match_view(m: MatchLog, hero: str | None, deck_main: list[tuple[str, int]] | None) -> dict | None:
@@ -267,6 +466,9 @@ def match_view(m: MatchLog, hero: str | None, deck_main: list[tuple[str, int]] |
         "remaining": remaining,
         "unexpected": unexpected,
         "seen_theirs": dict(theirs),
+        # the whole match, not just this game, with how each card was last seen
+        "shown_theirs": shown_in_match(m, opp),
+        "last_mine": dict(g.last.get(hero, {})) if hero else {},
         "seat_known": hero is not None and hero in g.players,
         "hero": hero,
         "winner": m.winner or g.winner,

@@ -122,6 +122,29 @@ Picked: Broadside Bombardiers
   conceded`, `X wins the match 2-1`. **No life totals, no draws by name, no
   hand, no library, no deck registration, no sideboarding.** Whether the
   file is written during the match or at its end is still unverified.
+- **Nothing logs a permanent leaving the battlefield** (measured 2026-10-11
+  over all 2,521 logs on this machine): no "dies", "is destroyed", damage or
+  combat-death line exists. `X puts [card] into their graveyard` is surveil
+  and other library-to-graveyard moves only. A tracker can therefore say how
+  a card was *last seen* (cast, milled, exiled, bounced...) but never which
+  zone it is in now. The page says so next to the opponent's cards.
+- **Who owns a named card** is settled per line shape by measuring, over
+  that corpus, how often the acting player had cast or played the card
+  elsewhere in the match. Safe (≥94%): plays/casts/discards/cycles/
+  sacrifices/mills/reveals, `puts (a) triggered ability from`, `activates an
+  ability of`, `puts [card] into their graveyard / onto the battlefield /
+  on top of their library`, and `X's [card] creates` — **unless the line
+  ends `under Y's control`**, where the possessive is the token's recipient
+  (Skyclave Apparition, Generous Plunderer). `X is being attacked by
+  [cards]` names the *other* player's cards (98.6%); a record can hold two
+  lines there (`B is being attacked by X` + `B's Liliana is being attacked
+  by Y`). Unsafe and therefore not used for ownership: `draws N cards with
+  [card]` (both players draw off a Timetwister), `puts a counter on` (stun
+  counters), `chooses to use`, and the `with [card]` of a reveal (Oath of
+  Druids is yours, the Duress making you reveal is not). The first card of
+  `exiles ... with`, `returns ... to its owner's hand with` and `counters
+  ... with` is a coin flip: those only update the last event of a card whose
+  owner is already known. `matches.py` documents the resulting numbers.
 - **No decklist anywhere on disk** (searched all 41,104 files MTGO keeps,
   2026-10-07). The only source is the client's deck editor Export, a `.dek`
   XML file (`<Cards CatID Quantity Sideboard Name/>`), which the user saves

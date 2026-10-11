@@ -594,6 +594,10 @@ def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
         rem = {c["name"]: c["n"] for c in g["remaining"]}
         assert "Mox Diamond" not in rem and rem["Swamp"] == 4 and rem["Dark Ritual"] == 1
         assert any(c["name"] == "Mox Diamond" for c in g["seen_mine"])
+        # the opponent's cards span the whole match, tagged with how each was last seen
+        shown = {c["name"]: c for c in g["shown_theirs"]}
+        assert shown["Fractured Identity"]["last"] == "milled" and shown["Fractured Identity"]["current"] is False
+        assert shown["Six"]["current"] is True and g["last_mine"]["Mox Diamond"] == "cast"
         assert ag["edits"] == {"to_main": [], "to_side": [], "active": False, "match": g["match_id"]}
         # the deck's cards get Scryfall lookups requested like draft cards do
         assert "Never Played" in st["cards"] or st["cards_pending"] >= 0
