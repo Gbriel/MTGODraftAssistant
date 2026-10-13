@@ -42,6 +42,7 @@ def arena_default() -> Path:
     return arena_default_log
 from .cube_list import CubeList, from_names
 from .matches import MatchWatcher, guess_hero, match_view
+from .history import History
 from .mtgo_deck import DekWatcher, draft_started_at
 from .pool import PoolReport, pool_state
 from .ratings import CardRating, RatingsPool, RatingsProvider, dataset_for_event
@@ -226,6 +227,9 @@ class Handler(BaseHTTPRequestHandler):
             self._static(path[len("/static/"):])
         elif path == "/api/state":
             self._json(self.server.store.get())
+        elif path == "/api/history":
+            h = self.server.on_history
+            self._json(h() if h is not None else {"status": "disabled", "cards": [], "opponents": {}, "draft_rows": []})
         elif path == "/events":
             self._sse()
         elif path.startswith("/img/"):
@@ -343,13 +347,15 @@ class DraftHTTPServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], store: StateStore, verbose: bool = False,
                  image_dir: Path | None = None,
                  on_config: Callable[[dict], dict] | None = None,
-                 on_deck: Callable[[dict], dict] | None = None) -> None:
+                 on_deck: Callable[[dict], dict] | None = None,
+                 on_history: Callable[[], dict] | None = None) -> None:
         super().__init__(address, Handler)
         self.store = store
         self.verbose = verbose
         self.image_dir = image_dir
         self.on_config = on_config
         self.on_deck = on_deck
+        self.on_history = on_history
 
 
 # -- orchestration -----------------------------------------------------------
@@ -374,8 +380,14 @@ class DraftServer:
                  arena_cube: RatingsProvider | None = None,
                  ratings_sets: dict[str, RatingsProvider] | None = None,
                  arena_db: ArenaCardDb | None = None,
-                 ratings_pool: RatingsPool | None = None) -> None:
+                 ratings_pool: RatingsPool | None = None,
+                 history: History | None = None) -> None:
         self.log_dir: Path | None = Path(log_dir) if log_dir is not None else None
+        # personal history (card stats, opponent records) from every match log on disk;
+        # None (tests, --no-history) leaves the Card stats tab empty
+        self.history = history
+        if history is not None:
+            history.on_change = self._on_cards_changed
         self.interval = interval
         self.verbose = verbose
         self._ui_version = ui_version()
@@ -426,6 +438,7 @@ class DraftServer:
             image_dir=resolver.image_dir if resolver else None,
             on_config=self._on_config if allow_config else None,
             on_deck=self._on_deck,
+            on_history=(lambda: self.history.snapshot()) if history is not None else None,
         )
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -489,6 +502,8 @@ class DraftServer:
         state["arena_log"] = str(self.watcher.arena_log) if self.auto else (
             str(self.watcher.log_path) if self.arena else None)
         state["sources"] = self._sources()
+        state["history_version"] = self.history.version if self.history is not None else 0
+        state.setdefault("records", {})
         return state
 
     def _active_source(self, update: Update) -> str:
@@ -784,12 +799,19 @@ class DraftServer:
             unmatched = list(names)
         sets = {key: p.lookup(names)[0] for key, p in alts.items()}
         log_dir = update.path.parent if source == "arena" else self.log_dir
-        self.store.set(self._decorate(build_state(
+        state = build_state(
             update, analysis, log_dir, self.store.version + 1,
             cards=cards, cards_pending=pending, card_errors=errors,
             ratings=ratings, ratings_meta=meta, ratings_unmatched=unmatched,
             pool=pool, ratings_sets=sets, arena_game=arena_game,
-        ), source))
+        )
+        # lifetime record against everyone in the pod and the current opponent
+        names = list(update.draft.players)
+        game = (arena_game or {}).get("game") or {}
+        if game.get("opponent"):
+            names.append(game["opponent"])
+        state["records"] = self.history.records_for(names) if self.history is not None else {}
+        self.store.set(self._decorate(state, source))
 
     def _publish_idle(self) -> None:
         with self._last_lock:
@@ -802,6 +824,8 @@ class DraftServer:
             self._last = (update, analysis)
         if update.new_draft:
             self._mtgo_hero = None
+            if self.history is not None:
+                self.history.request_refresh()         # a new draft log joins the history
         if self.verbose:
             d = update.draft
             live = d.current_pack
@@ -822,6 +846,8 @@ class DraftServer:
             return {"ok": False, "error": f"not a directory: {path}"}
         self.log_dir = path
         self.dek.set_folder(path)
+        if self.history is not None:
+            self.history.set_log_dir(path)
         if self._mtgo_watcher() is not None:
             self.watcher.set_log_dir(path)
         try:
@@ -931,6 +957,8 @@ class DraftServer:
         if self.resolver is not None:
             self.resolver.start()
         self.pool.start()
+        if self.history is not None:
+            self.history.start()
         # Prime synchronously so the first page load has data.
         first = self.watcher.poll()
         if first is not None:
@@ -965,8 +993,11 @@ class DraftServer:
                 continue
             started = draft_started_at(update.draft.timestamp)
             try:
-                if self.dek.changed(started) or self.matches.changed(started):
+                dek_changed, match_changed = self.dek.changed(started), self.matches.changed(started)
+                if dek_changed or match_changed:
                     self._republish()
+                if match_changed and self.history is not None:
+                    self.history.request_refresh()     # the match log grew: records and card stats move
             except Exception as e:  # noqa: BLE001 - never let a side input kill the poller
                 if self.verbose:
                     print(f"deck/match poll: {e}", flush=True)
@@ -984,6 +1015,8 @@ class DraftServer:
         if self.resolver is not None:
             self.resolver.stop()
         self.pool.stop()
+        if self.history is not None:
+            self.history.close()
 
     def _providers(self) -> list[RatingsProvider]:
         return self.pool.providers()

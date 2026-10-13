@@ -145,6 +145,16 @@ Picked: Broadside Bombardiers
   `exiles ... with`, `returns ... to its owner's hand with` and `counters
   ... with` is a coin flip: those only update the last event of a card whose
   owner is already known. `matches.py` documents the resulting numbers.
+- **Which draft a match belongs to** (verified 2026-10-13 over the 67
+  matches since draft logging began): **not the pod.** MTGO cube is a
+  league; only 4 of those 67 opponents were in the drafter's pod. The link
+  is the deck: of the non-basic cards you showed in the match, the share
+  that are among a draft's picks is 0.92–1.00 for the draft it came from and
+  at most 0.50 for any other draft in the week before, and it is always the
+  latest draft. `history.py` uses a 0.6 threshold; constructed matches score
+  low against every draft and stay unlinked. The old deployment folders
+  still hold copies of earlier match logs, so count by match id. A trophy is
+  three match wins and no losses in the draft.
 - **No decklist anywhere on disk** (searched all 41,104 files MTGO keeps,
   2026-10-07). The only source is the client's deck editor Export, a `.dek`
   XML file (`<Cards CatID Quantity Sideboard Name/>`), which the user saves

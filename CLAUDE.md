@@ -132,7 +132,21 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   `client`), and sideboarding is recorded by drag-and-drop on the page via
   `POST /api/deck`, kept per match and reset when the match changes.
   Whether MTGO writes the match log live or at match end is unverified.
-- **Next: M5** personal win rates and pod records from the match logs.
+- **M5 done** — `history.py`: every `Match_GameLog_*.dat` on the machine
+  summarised once and cached in `data/cache/history.sqlite` (first scan of
+  ~2,500 logs ≈ 10 s in the background, then milliseconds), deduplicated by
+  match id (old deployment folders keep copies). **A match is tied to a
+  draft by deck overlap**, not by pod: MTGO cube is a league, you play other
+  entrants, and the share of your shown non-basic cards that are among a
+  draft's picks is 0.92–1.00 for the right draft and ≤0.50 for any other
+  (DESIGN.md §2.3). Per card: drafts picked, record and trophies when
+  picked, and "GIH" = games where the log shows you with the card (MTGO
+  never names draws or hand). Per opponent: lifetime record, all formats.
+  `/api/history` serves it; the state carries `records` for the pod and the
+  current opponent, shown after names in the pod pane and the Deck tab. The
+  **Card stats** tab (`#stats`) is a sortable, searchable table with a
+  cube / all-matches scope and the list of drafts the numbers come from.
+  `--no-history` skips it.
 
 The server is stdlib on purpose (one page, one stream, one local client); a
 framework has not earned its place yet. Revisit if the API grows.

@@ -17,6 +17,7 @@
       <span id="cube"></span>
       <span id="cards-pending" class="muted"></span>
       <a id="nav-deck" href="#deck" hidden>Deck &amp; game →</a>
+      <a id="nav-stats" href="#stats">Card stats →</a>
       <a id="nav-draft" href="#" hidden>← Draft</a>
       <span class="conn"><span id="conn-dot" class="dot"></span><span id="conn-text">connecting</span></span>
       <button id="gear" class="gear" type="button" title="Settings" aria-label="Settings">⚙</button>
@@ -146,6 +147,28 @@
     <footer class="foot">
       <div class="line small"><span id="deck-foot"></span><span id="updated-2"></span></div>
     </footer>
+  </div>
+
+  <!-- ====================== personal card stats ====================== -->
+  <div id="view-stats" class="view" hidden>
+    <section class="sec">
+      <div class="sec-head">
+        <h2>Your card stats</h2>
+        <div class="tabs small"><button id="stats-cube" type="button" class="on">Cube drafts</button><button id="stats-all" type="button">All matches</button></div>
+        <span id="stats-note" class="note"></span>
+        <input id="stats-find" class="right" type="search" placeholder="find a card" autocomplete="off" spellcheck="false">
+      </div>
+      <p id="stats-hint" class="hint">Click a column to sort. "GIH" counts the games where the match log shows you with the card: MTGO never names your draws or hand, so a card you held but never cast is not counted.</p>
+      <p id="stats-empty" class="empty"></p>
+      <table id="stats-table" class="stats"><thead><tr></tr></thead><tbody></tbody></table>
+    </section>
+    <section class="sec" id="pane-drafts">
+      <div class="sec-head">
+        <h2>Drafts with match data</h2>
+        <span id="drafts-note" class="note"></span>
+      </div>
+      <div id="drafts-list"></div>
+    </section>
   </div>
 </div>
 

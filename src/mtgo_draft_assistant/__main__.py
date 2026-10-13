@@ -28,6 +28,7 @@ from .config import (
     resolve_log_dir,
 )
 from .cube_list import load as load_cube
+from .history import History
 from .ratings import (
     DEFAULT_EXPANSION,
     DEFAULT_FORMAT,
@@ -61,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="where Scryfall card data, images and 17Lands ratings are cached")
     ap.add_argument("--no-cards", action="store_true",
                     help="offline mode: no Scryfall lookups, text-only cards")
+    ap.add_argument("--no-history", action="store_true",
+                    help="skip the match-log history scan (personal card stats, opponent records)")
     ap.add_argument("--no-ratings", action="store_true",
                     help="skip 17Lands ratings (also: enabled = false under [ratings] in config.toml)")
     ap.add_argument("--ratings-expansion", default=None,
@@ -124,11 +127,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"warning: cube list {cube_spec!r} not loaded: {e}", file=sys.stderr, flush=True)
 
     arena_db = None if args.mtgo else open_arena_db()
+    # personal history from every MTGO match log on the machine, summarised once
+    # and cached; the first scan of a few thousand logs takes ~10 s in the background
+    history = None if args.no_history else History(log_dir, args.cache_dir)
     server = DraftServer(log_dir, host=args.host, port=args.port,
                          interval=args.interval, verbose=args.verbose,
                          resolver=resolver, ratings_pool=pool,
-                         watcher=watcher, cube=cube, arena_db=arena_db)
+                         watcher=watcher, cube=cube, arena_db=arena_db, history=history)
     server.start()
+    if history is not None:
+        print(f"Match history: scanning MTGO match logs for card stats and opponent records "
+              f"(cached in {args.cache_dir})", flush=True)
     if not args.mtgo:
         print(f"Arena card database: {arena_db.path if arena_db else 'not found (names fall back to 17Lands and Scryfall)'}",
               flush=True)

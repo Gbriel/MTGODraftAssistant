@@ -638,6 +638,51 @@ def test_mtgo_deck_match_and_sideboard_edits(tmp_path, monkeypatch):
         s.stop()
 
 
+def test_history_endpoint_and_opponent_records(tmp_path, monkeypatch):
+    """/api/history serves the computed history; the state carries the record against the current opponent."""
+    from mtgo_draft_assistant import matches
+    from mtgo_draft_assistant.history import History
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    draft = os.path.join(ROOT, "tests", "fixtures", "drafts", "Wumpwumpwump-2026.9.22-11053-35969982-C03C03C03.txt")
+    _write(logs / os.path.basename(draft), draft, 1_700_000_000.0)          # Time: 9/22/2026 9:15:11 AM
+    draft_start = time.mktime(time.strptime("2026-09-22 09:15:11", "%Y-%m-%d %H:%M:%S"))
+    mdir = tmp_path / "matches"
+    mdir.mkdir()
+    monkeypatch.setattr(matches, "LOG_GLOB", str(mdir / "Match_GameLog_*.dat"))
+    m1 = mdir / os.path.basename(MTGO_MATCH)
+    shutil.copyfile(MTGO_MATCH, m1)
+    os.utime(m1, (draft_start + 3600, draft_start + 3600))
+
+    hist = History(logs, tmp_path / "cache")
+    s = DraftServer(logs, port=0, interval=0.05, config_path=tmp_path / "c.toml", history=hist)
+    s.start()
+    try:
+        hist.wait(10)
+        h = json.loads(_get(s.url + "api/history")[2])
+        assert h["status"] == "ready" and h["hero"] == "Wumpwumpwump"
+        assert h["opponents"] == {"jojo_lefou": [1, 0]} and h["drafts_linked"] == 1
+        assert any(c["name"] == "Mox Diamond" and c["gih_g"] >= 1 for c in h["cards"])
+        # the Deck pane's opponent is jojo_lefou, so the state carries that record
+        st = _wait_state(s, lambda st: (st.get("records") or {}).get("jojo_lefou"))
+        assert st["records"] == {"jojo_lefou": [1, 0]} and st["history_version"] >= 1
+        assert st["arena_game"]["game"]["opponent"] == "jojo_lefou"
+    finally:
+        s.stop()
+
+
+def test_history_endpoint_without_history():
+    s = DraftServer(None, port=0, interval=0.05)
+    s.start()
+    try:
+        h = json.loads(_get(s.url + "api/history")[2])
+        assert h["status"] == "disabled" and h["cards"] == []
+        assert json.loads(_get(s.url + "api/state")[2])["records"] == {}
+    finally:
+        s.stop()
+
+
 def _wait_state(s, ready, timeout: float = 5.0) -> dict:
     """Poll /api/state until ``ready(state)`` is truthy; return that state."""
     deadline = time.time() + timeout

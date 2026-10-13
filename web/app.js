@@ -11,7 +11,7 @@
   let lastState = null, cards = {}, ratings = {}, lastMeta = null, lastCommitted = -1;
 
   // ------------------------------------------------------------ prefs
-  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle" };
+  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle", statsScope: "cube", statsSort: { key: "picked", dir: -1 } };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem("draftPrefs") || "{}")); } catch (e) { /* ignore */ }
   function savePrefs() { try { localStorage.setItem("draftPrefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ } }
 
@@ -19,6 +19,8 @@
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
   const pos = (a, b) => `P${a}P${b}`;
+  // lifetime match record against a player, from the match logs: " (3-1)" or ""
+  const recordSuffix = (st, name) => { const r = st && st.records && name ? st.records[name] : null; return r ? ` (${r[0]}-${r[1]})` : ""; };
   const BASICS = { Plains: ["W", "Basic Land — Plains"], Island: ["U", "Basic Land — Island"], Swamp: ["B", "Basic Land — Swamp"], Mountain: ["R", "Basic Land — Mountain"], Forest: ["G", "Basic Land — Forest"] };
   function info(name) {
     if (cards[name]) return cards[name];
@@ -283,7 +285,7 @@
     const heroIdx = d.players.indexOf(d.hero);
     // physical seat s (clockwise from you) holds the pack that reaches you in u picks
     const seatOf = (u) => passLeft ? (n - u) % n : u;
-    const nameOf = (s) => s === 0 ? "you" : (heroIdx >= 0 && d.players[(heroIdx + s) % n]) || `seat ${s + 1}`;
+    const nameOf = (s) => { if (s === 0) return "you"; const nm = heroIdx >= 0 && d.players[(heroIdx + s) % n]; return nm ? nm + recordSuffix(st, nm) : `seat ${s + 1}`; };
     const byU = new Map(st.in_flight.map((f) => [f.picks_until_return, f]));
     if (list) { renderPodList(st, { n, cpp, size, lastPick, passLeft, seatOf, nameOf, byU }); return; }
     const box = $("pod"); clear(box);
@@ -517,7 +519,7 @@
       else { pill.className = "pill"; pill.textContent = g.over ? "match over" : "in progress"; }
       const seat = g.my_seat, lifeMe = seat != null ? g.life[String(seat)] : undefined;
       const lifeOpp = Object.entries(g.life || {}).filter(([s]) => String(s) !== String(seat)).map(([, v]) => v)[0];
-      $("cube").textContent = `${g.opponent ? "vs " + g.opponent : ""}${lifeMe !== undefined ? ` · life ${lifeMe} – ${lifeOpp === undefined ? "?" : lifeOpp}` : ""}${g.library != null ? ` · ${g.library} in library` : ""}${g.seat_known ? "" : " · which player you are is not known yet"}`;
+      $("cube").textContent = `${g.opponent ? "vs " + g.opponent + recordSuffix(st, g.opponent) : ""}${lifeMe !== undefined ? ` · life ${lifeMe} – ${lifeOpp === undefined ? "?" : lifeOpp}` : ""}${g.library != null ? ` · ${g.library} in library` : ""}${g.seat_known ? "" : " · which player you are is not known yet"}`;
     }
     // sideboard edits for this match
     const ed = ag.edits;
@@ -580,7 +582,7 @@
       $("pane-opp").hidden = !g;
     }
     if (g) {
-      $("opp-title").textContent = `${g.opponent || "Opponent"} has shown`;
+      $("opp-title").textContent = `${g.opponent ? g.opponent + recordSuffix(st, g.opponent) : "Opponent"} has shown`;
       const box = $("opp-cards"); clear(box);
       // MTGO: the whole match, each card tagged with how it was last seen (not its zone: MTGO
       // never logs a permanent leaving the battlefield). Arena: this game's seen list.
@@ -602,11 +604,89 @@
     $("deck-foot").textContent = dk ? `${mtgo ? "MTGO" : "Arena"} · ${dk.source || "deck"} · ${(dk.submitted_at || "").replace("T", " ")}${dk.event ? " · " + dk.event : ""}` : "";
   }
 
+  // ------------------------------------------------------------ personal card stats
+  // /api/history: every match log on disk tied to the draft it was played with.
+  let hist = null, histVersion = -1, histLoading = false;
+  function loadHistory(force) {
+    if (histLoading) return;
+    if (!force && hist && lastState && lastState.history_version === histVersion) return;
+    histLoading = true;
+    fetch("/api/history").then((r) => r.json()).then((h) => {
+      hist = h; histVersion = lastState ? lastState.history_version : histVersion; histLoading = false;
+      if (location.hash === "#stats") renderStats();
+      if (h.status === "scanning") setTimeout(() => loadHistory(true), 2000);
+    }).catch(() => { histLoading = false; });
+  }
+  $("stats-cube").addEventListener("click", () => { prefs.statsScope = "cube"; savePrefs(); renderStats(); });
+  $("stats-all").addEventListener("click", () => { prefs.statsScope = "all"; savePrefs(); renderStats(); });
+  $("stats-find").addEventListener("input", () => renderStats());
+  const pct = (w, g) => g ? `${(100 * w / g).toFixed(0)}%` : "";
+  function renderStats() {
+    const h = hist, all = prefs.statsScope === "all";
+    $("stats-cube").classList.toggle("on", !all); $("stats-all").classList.toggle("on", all);
+    const head = $("stats-table").querySelector("thead tr"), body = $("stats-table").querySelector("tbody"); clear(head); clear(body);
+    const empty = $("stats-empty"), note = $("stats-note");
+    if (!h) { note.textContent = ""; empty.textContent = "Loading your match history…"; return; }
+    if (h.status === "disabled") { note.textContent = ""; empty.textContent = "History is off for this run (--no-history)."; return; }
+    if (h.status === "scanning" && !h.cards.length) { note.textContent = ""; empty.textContent = "Reading the MTGO match logs for the first time; this takes a few seconds."; return; }
+    note.textContent = `${h.hero || "?"} · ${h.drafts_linked} draft${h.drafts_linked === 1 ? "" : "s"} with matches · ${h.matches_with_result} matches on disk${h.error ? " · error: " + h.error : ""}`;
+    // columns: key -> (label, value, sort value); the GIH pair follows the scope
+    const gG = all ? "all_g" : "gih_g", gW = all ? "all_w" : "gih_w";
+    const cols = [
+      ["name", "Card", (c) => c.name, (c) => c.name.toLowerCase()],
+      ["picked", "Drafts picked", (c) => String(c.picked), (c) => c.picked],
+      ["with", "With matches", (c) => String(c.drafts_with_matches), (c) => c.drafts_with_matches],
+      ["pick_wr", "Record when picked", (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : "", (c) => c.pick_w + c.pick_l ? c.pick_w / (c.pick_w + c.pick_l) : -1, (c) => pct(c.pick_w, c.pick_w + c.pick_l)],
+      ["trophies", "Trophies", (c) => c.drafts_with_matches ? `${c.trophies} / ${c.drafts_with_matches}` : "", (c) => c.drafts_with_matches ? c.trophies / c.drafts_with_matches : -1, (c) => pct(c.trophies, c.drafts_with_matches)],
+      ["games", all ? "Games (all formats)" : "Games (cube)", (c) => String(c[gG]), (c) => c[gG]],
+      ["gih_wr", "GIH win rate", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
+    ];
+    const sort = prefs.statsSort || { key: "picked", dir: -1 };
+    for (const [key, label] of cols) {
+      const th = el("th", key === sort.key ? "on" : "", label + (key === sort.key ? (sort.dir < 0 ? " ▾" : " ▴") : ""));
+      th.addEventListener("click", () => { prefs.statsSort = { key, dir: key === sort.key ? -sort.dir : (key === "name" ? 1 : -1) }; savePrefs(); renderStats(); });
+      head.appendChild(th);
+    }
+    const q = $("stats-find").value.trim().toLowerCase();
+    let rows = h.cards.filter((c) => !q || c.name.toLowerCase().includes(q));
+    if (!all) rows = rows.filter((c) => c.picked || c.gih_g);                 // cube scope: cards from your drafts
+    const col = cols.find((c) => c[0] === sort.key) || cols[1];
+    rows.sort((a, b) => { const x = col[3](a), y = col[3](b); return (x < y ? -1 : x > y ? 1 : 0) * sort.dir || a.name.localeCompare(b.name); });
+    empty.textContent = rows.length ? "" : (h.cards.length ? "No card matches that search." : "No drafts with matches yet: card stats appear once a draft's matches are in the match logs.");
+    for (const c of rows) {
+      const tr = el("tr", (all ? c[gG] : c.drafts_with_matches || c.gih_g) ? "" : "thin");
+      for (const [key, , text, , extra] of cols) {
+        const td = el("td", key === "name" ? "name" : "");
+        if (key === "name") { td.textContent = c.name; td.dataset.card = c.name; }
+        else if (extra) { const v = text(c); if (v) { td.appendChild(el("span", "wr", extra(c))); td.appendChild(el("span", "n", v)); } }
+        else td.textContent = text(c);
+        tr.appendChild(td);
+      }
+      body.appendChild(tr);
+    }
+    // drafts with their matches: where the numbers come from
+    const list = $("drafts-list"); clear(list);
+    const ds = (h.draft_rows || []).filter((d) => d.matches).slice().reverse();
+    $("drafts-note").textContent = ds.length ? `${ds.filter((d) => d.trophy).length} trophies in ${ds.length} drafts · a trophy is 3 match wins and no losses` : "";
+    $("pane-drafts").hidden = !ds.length;
+    for (const d of ds) {
+      const row = el("div", "drafts-row");
+      row.appendChild(el("span", "when", d.started_at.replace("T", " ").slice(0, 16)));
+      row.appendChild(el("span", "rec" + (d.trophy ? " trophy" : ""), `${d.w}-${d.l}${d.trophy ? " 🏆" : ""}`));
+      const opps = el("span", "opps");
+      // the log's score is the winner's; show it from your side
+      const mine = (o) => { const m = /^(\d+)-(\d+)$/.exec(o.score || ""); return !m ? (o.score || "") : o.result === "L" ? `${m[2]}-${m[1]}` : o.score; };
+      d.opponents.forEach((o, i) => { if (i) opps.appendChild(document.createTextNode(" · ")); const b = el("b", null, o.name); opps.appendChild(b); opps.appendChild(document.createTextNode(` ${o.result || "unfinished"}${o.score ? " " + mine(o) : ""}`)); });
+      row.appendChild(opps); list.appendChild(row);
+    }
+  }
+
   // ------------------------------------------------------------ routing
   function route() {
-    const deck = location.hash === "#deck";
-    $("view-deck").hidden = !deck; $("view-draft").hidden = deck;
-    $("nav-draft").hidden = !deck;
+    const deck = location.hash === "#deck", stats = location.hash === "#stats";
+    $("view-deck").hidden = !deck; $("view-stats").hidden = !stats; $("view-draft").hidden = deck || stats;
+    $("nav-draft").hidden = !(deck || stats); $("nav-stats").hidden = stats;
+    if (stats) { loadHistory(false); renderStats(); }
     if (lastState) render(lastState);
   }
   window.addEventListener("hashchange", route);
@@ -623,6 +703,7 @@
     const hasDeck = !!(st.arena_game && (st.arena_game.deck || st.arena_game.game));
     if (location.hash === "#deck" && !hasDeck) { history.replaceState(null, "", location.pathname); route(); return; }
     renderHeader(st); renderRatings(st); updateLogDir(st);
+    if (location.hash === "#stats") { if (st.history_version !== histVersion) loadHistory(false); return; }
     if (location.hash === "#deck") { renderDeck(st); return; }
     renderCurrent(st); renderPod(st); renderPicks(st); renderWheels(st); renderPool(st);
   }
