@@ -136,6 +136,13 @@ button.link:hover { color: #dcc5f5; }
 .seat .pack span { font-size: 10.5px; white-space: nowrap; }
 .seat.hero .pack { background: var(--accent-bg); border-color: var(--accent-line); color: #f1e8fb; }
 .seat.unseen .pack { background: transparent; border-color: var(--line); color: var(--dim); }
+/* the list layout: one .row per pick to come */
+.podlist .row { padding: 10px 0; }
+.podlist .row.thin .lbl .big { color: var(--dim); font-weight: 600; }
+.podlist .row .hint { font-size: 12.5px; color: var(--muted); align-self: center; }
+.podlist .hint.pad { padding: 10px 0 0; border-top: 1px solid var(--line); }
+.tabs.small { font-size: 12px; }
+.tabs.small button { padding: 3px 10px; }
 
 /* ---- footer / find / 17Lands ------------------------------------------ */
 .foot { display: flex; flex-direction: column; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }

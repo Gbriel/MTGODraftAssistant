@@ -11,7 +11,7 @@
   let lastState = null, cards = {}, ratings = {}, lastMeta = null, lastCommitted = -1;
 
   // ------------------------------------------------------------ prefs
-  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true };
+  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle" };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem("draftPrefs") || "{}")); } catch (e) { /* ignore */ }
   function savePrefs() { try { localStorage.setItem("draftPrefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ } }
 
@@ -266,13 +266,27 @@
   // clockwise from you (seat 2 is on your left), the same all draft long.
   // Packs 1 and 3 pass left, so a pack reaches you from your right; pack 2
   // passes right. Only the packs move between rounds, not the people.
+  // Two layouts for the same facts: the circle (default) or a list of the
+  // picks still to come, one row per pack, nearest first.
+  $("pod-circle").addEventListener("click", () => { prefs.podLayout = "circle"; savePrefs(); renderPod(lastState); });
+  $("pod-list-tab").addEventListener("click", () => { prefs.podLayout = "list"; savePrefs(); renderPod(lastState); });
   function renderPod(st) {
-    const box = $("pod"); clear(box);
+    if (!st) return;
     const d = st.draft, p = st.position;
     $("pane-pod").hidden = !d || p.status === "idle";
     if ($("pane-pod").hidden) return;
+    const list = prefs.podLayout === "list";
+    $("pod-circle").classList.toggle("on", !list); $("pod-list-tab").classList.toggle("on", list);
+    $("pod").hidden = list; $("pod-list").hidden = !list;
     const n = d.pod_size || 8, cpp = d.cards_per_pick || 1, size = d.pack_sizes[String(p.pack)] || 15, lastPick = Math.ceil(size / cpp);
     const passLeft = p.pack !== 2;
+    const heroIdx = d.players.indexOf(d.hero);
+    // physical seat s (clockwise from you) holds the pack that reaches you in u picks
+    const seatOf = (u) => passLeft ? (n - u) % n : u;
+    const nameOf = (s) => s === 0 ? "you" : (heroIdx >= 0 && d.players[(heroIdx + s) % n]) || `seat ${s + 1}`;
+    const byU = new Map(st.in_flight.map((f) => [f.picks_until_return, f]));
+    if (list) { renderPodList(st, { n, cpp, size, lastPick, passLeft, seatOf, nameOf, byU }); return; }
+    const box = $("pod"); clear(box);
     // the arrival order in words, so it never depends on reading the circle
     const order = st.in_flight.slice().sort((a, b) => a.due_pick - b.due_pick)
       .map((f) => `${pos(f.pack, f.first_pick)} at pick ${f.due_pick} (${Math.max(0, f.passed.length - (n - 1) * cpp)} left)`);
@@ -280,8 +294,6 @@
       + (order.length ? ` · coming back to you: ${order.join(", ")}` : "");
     box.appendChild(el("div", "ring"));
     const c = el("div", "centre", passLeft ? "↻" : "↺"); c.appendChild(el("small", null, passLeft ? "packs pass left" : "packs pass right")); box.appendChild(c);
-    const heroIdx = d.players.indexOf(d.hero);
-    const byU = new Map(st.in_flight.map((f) => [f.picks_until_return, f]));
     for (let s = 0; s < n; s++) {
       // physical seat s, going clockwise from you (left on screen first)
       const ang = Math.PI / 2 + s * 2 * Math.PI / n;
@@ -289,8 +301,7 @@
       const u = passLeft ? (n - s) % n : s;
       const seat = el("div", "seat" + (s === 0 ? " hero" : ""));
       seat.style.left = (210 + 150 * Math.cos(ang)) + "px"; seat.style.top = (170 + 125 * Math.sin(ang)) + "px";
-      const pi = heroIdx >= 0 ? (heroIdx + s) % n : -1;
-      seat.appendChild(el("div", "who", s === 0 ? "you" : (pi >= 0 && d.players[pi]) || `seat ${s + 1}`));
+      seat.appendChild(el("div", "who", nameOf(s)));
       const pack = el("div", "pack"); pack.dataset.seat = String(u);
       const f = byU.get(u);
       if (u === 0) {
@@ -307,6 +318,48 @@
       else { seat.classList.add("unseen"); pack.appendChild(el("b", null, "unseen")); pack.appendChild(el("span", null, p.pick + u > lastPick ? "won't reach you" : `due pick ${p.pick + u}`)); }
       seat.appendChild(pack); box.appendChild(seat);
     }
+  }
+
+  // The list: one row per pick still to come in this booster, nearest first.
+  // Each row says whose pack it is now and, when you have seen it, what you
+  // passed sorted by how likely each card is to still be there (17Lands ALSA),
+  // the ones past the expected count dimmed.
+  function renderPodList(st, c) {
+    const box = $("pod-list"); clear(box);
+    const p = st.position, cpp = c.cpp;
+    $("pod-note").textContent = `${c.passLeft ? "packs pass left" : "packs pass right"} · nearest pick first · dimmed cards are the ones least likely to still be there`;
+    const alsa = (nm) => { const r = ratings[nm]; return r && r.alsa != null ? r.alsa : -1; };
+    const start = st.current_pack ? 1 : 0;             // the pack in front of you has its own pane
+    let beyond = 0;
+    for (let u = start; u < c.n; u++) {
+      const j = p.pick + u;
+      if (j > c.lastPick) { beyond++; continue; }
+      const f = c.byU.get(u), who = c.nameOf(c.seatOf(u));
+      const row = el("div", "row" + (f ? "" : " thin")), lbl = el("div", "lbl");
+      lbl.appendChild(el("span", "big", `Pick ${j}`));
+      const sub = el("span", "sub");
+      if (f) {
+        const left = Math.max(0, f.passed.length - (c.n - 1) * cpp);
+        sub.appendChild(el("b", null, `${left} of ${f.passed.length}`)); sub.appendChild(document.createTextNode(" will be left"));
+        lbl.appendChild(sub);
+        const you = el("span", "you"); you.appendChild(document.createTextNode(`your ${pos(f.pack, f.first_pick)} pack · you took `)); you.appendChild(el("span", null, f.your_pick));
+        lbl.appendChild(you);
+        lbl.appendChild(el("span", "you", u === 0 ? "arriving now" : `with ${who} now`));
+        row.appendChild(lbl);
+        const tiles = el("div", "tiles tight");
+        const names = f.passed.slice().sort((a, b) => alsa(b) - alsa(a));
+        names.forEach((nm, k) => tiles.appendChild(tile(nm, "", k >= left ? "prev" : "")));
+        row.appendChild(tiles);
+      } else {
+        const cards = c.size - (j - 1) * cpp;        // what is left of a pack by its j-th pick
+        sub.appendChild(document.createTextNode(u === 0 ? "arriving now" : `with ${who} now`)); lbl.appendChild(sub);
+        row.appendChild(lbl);
+        row.appendChild(el("div", "hint", `not seen yet · ${cards} card${cards === 1 ? "" : "s"} when it reaches you`));
+      }
+      box.appendChild(row);
+    }
+    if (beyond) box.appendChild(el("div", "hint pad", `${beyond} more pack${beyond === 1 ? "" : "s"} in the pod will not reach you before this booster ends`));
+    if (!box.childNodes.length) box.appendChild(el("p", "empty", "Nothing on its way: this booster is over."));
   }
 
   // ------------------------------------------------------------ picks
