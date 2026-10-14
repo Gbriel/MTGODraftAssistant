@@ -662,8 +662,8 @@ def test_history_endpoint_and_opponent_records(tmp_path, monkeypatch):
         hist.wait(10)
         h = json.loads(_get(s.url + "api/history")[2])
         assert h["status"] == "ready" and h["hero"] == "Wumpwumpwump"
-        assert h["opponents"] == {"jojo_lefou": [1, 0]} and h["drafts_linked"] == 1
-        assert any(c["name"] == "Mox Diamond" and c["gih_g"] >= 1 for c in h["cards"])
+        assert h["opponents"] == {"jojo_lefou": [1, 0]} and h["decks_from_drafts"] == 1
+        assert any(c["name"] == "Mox Diamond" and c["cube_g"] >= 1 and c["played"] == 1 for c in h["cards"])
         # the Deck pane's opponent is jojo_lefou, so the state carries that record
         st = _wait_state(s, lambda st: (st.get("records") or {}).get("jojo_lefou"))
         assert st["records"] == {"jojo_lefou": [1, 0]} and st["history_version"] >= 1

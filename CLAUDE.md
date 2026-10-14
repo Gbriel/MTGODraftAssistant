@@ -139,10 +139,16 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   draft by deck overlap**, not by pod: MTGO cube is a league, you play other
   entrants, and the share of your shown non-basic cards that are among a
   draft's picks is 0.92–1.00 for the right draft and ≤0.50 for any other
-  (DESIGN.md §2.3). Per card: drafts picked, record and trophies when
-  picked, and "played" = games where the log shows you with the card, once
-  per game (MTGO never names draws or hand, so **don't call it GIH**; the
-  user objected). Per opponent: lifetime record, all formats.
+  (DESIGN.md §2.3). Before draft logging was switched on (2026-09-21) there
+  are no draft logs at all, so **decks are inferred from the matches**:
+  time-ordered grouping by shown-card overlap ≥ 0.25 within 24 h, at most
+  three finished matches per deck (a cube league entry), tuned to reproduce
+  all 58 known same-draft pairs. Per card the primary numbers are **decks
+  played** (the user's call: more useful than picks), with match record and
+  trophies, then games "played" = games where the log shows you with the
+  card, once per game (MTGO never names draws or hand, so **don't call it
+  GIH**; the user objected); logged picks are a trailing column. Per
+  opponent: lifetime record, all formats.
   `/api/history` serves it; the state carries `records` for the pod and the
   current opponent, shown after names in the pod pane and the Deck tab. The
   **Card stats** tab (`#stats`) is a sortable, searchable table with a

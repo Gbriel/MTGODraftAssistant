@@ -1,34 +1,46 @@
 """
-Personal history: every MTGO match log on the machine, tied to the draft it
-came from, turned into per-card and per-opponent numbers.
+Personal history: every MTGO match log on the machine, grouped into the
+decks they were played with, turned into per-card and per-opponent numbers.
 
 Sources (both read-only, DESIGN.md §2.3):
   * ``Match_GameLog_*.dat`` - players, game and match winners, and the cards
-    each player showed per game (``matches.py``). Roughly 2,500 on this
-    machine; each is summarised once and cached in ``history.sqlite`` keyed
-    by (path, size, mtime), so a restart costs milliseconds, not a minute.
+    each player showed per game (``matches.py``). Roughly 1,300 unique on
+    this machine; each is summarised once and cached in ``history.sqlite``
+    keyed by (path, size, mtime), so a restart costs milliseconds. Old MTGO
+    deployment folders keep copies of the same logs: deduplicated by id.
   * the draft logs in the log folder - the pod's players and your picks.
+    These only exist from the day draft logging was switched on.
 
-A match belongs to the draft whose picks it was played with: of the
-non-basic cards you showed in the match, the share that are among a draft's
-picks, over the drafts started in the week before the match. Verified on
-2026-10-13 over the 67 matches since draft logging began: the right draft
-scores 0.92-1.00 and the runner-up at most 0.50, so the threshold is 0.6.
-Pod membership is **not** the link - MTGO cube is a league, you play other
-entrants, and only 4 of those 67 opponents were in your pod. Match logs
-carry no event or format marker, so constructed matches simply score low
-against every draft and stay unlinked.
+**Decks.** A deck is one league entry: the matches you played with one set
+of cards. Where a draft log exists, the deck is that draft and its matches
+are found by overlap: of the non-basic cards you showed in a match, the
+share among a draft's picks is 0.92-1.00 for the right draft and at most
+0.50 for any other (67 matches, 2026-10-13). Where no draft log exists
+(everything before 2026-09-21), decks are inferred from the matches alone:
+walking them in time order, a match joins the latest open deck whose shown
+cards it overlaps by >= 0.25, within 24 hours, while that deck has fewer
+than three finished matches (a cube league is three matches). Tuned
+against the 19 logged drafts: all 58 same-draft pairs reproduced, none
+merged or split wrongly. The threshold is lower than for draft logs because
+one match shows only ~15 of a deck's ~23 non-basics.
 
-Old MTGO deployment folders keep copies of the same logs, so matches are
-deduplicated by id before anything is counted.
+**Constructed** decks are the same cards for weeks, far beyond three
+matches. A first pass looks for them: matches within a week that each
+overlap the chain's *first* match by >= 0.4 both ways (comparing with the
+union instead snowballs: a run of similar cube decks grew to 485 matches and
+the whole cube). Five or more finished matches on a pool of <= 45 non-basics
+is constructed; those matches count in the all-formats numbers and nowhere
+else. On this machine (2026-10-13) there are none: every match is cube.
 
 Per card:
-  * **picked**: drafts in which you took it, and those drafts' match record
-    and trophy count (a trophy is 3+ match wins and no losses in the draft).
-  * **GIH**: games in which the log shows you with it (cast, played,
-    discarded, milled...), and how many you won. MTGO never names your draws
-    or hand, so "in hand" here means "became public". Two versions: games of
-    linked drafts only (cube), and every match on disk (all formats).
+  * **played**: decks (draft or inferred, not constructed) in which you
+    showed it, with those decks' match record and trophies (3+ match wins,
+    no losses in the deck).
+  * **picked**: logged drafts in which you took it, with the same numbers.
+  * **games**: games the log shows you with the card, counted once per game
+    however often you cast it, and whether you won. MTGO never names your
+    draws or hand, so this is "played", not game-in-hand. Two versions:
+    cube decks only, and every match on disk.
 Per opponent: lifetime match record, all formats.
 """
 
@@ -37,7 +49,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -47,7 +59,18 @@ from . import matches as M
 from .draft_log import parse as parse_draft
 from .mtgo_deck import draft_started_at
 
+# draft logs <- matches
 LINK_WINDOW = timedelta(days=7)
+LINK_THRESHOLD = 0.6
+NO_CARDS_WINDOW = timedelta(hours=6)     # a match that showed none of your cards: the draft just before it
+# matches -> inferred decks
+DECK_THRESHOLD = 0.25
+DECK_WINDOW = timedelta(hours=24)
+DECK_MAX_MATCHES = 3                     # finished matches in one cube league entry
+CONSTRUCTED_THRESHOLD = 0.4              # overlap with the chain's first match, both ways
+CONSTRUCTED_WINDOW = timedelta(days=7)
+CONSTRUCTED_MIN_FINISHED = 5             # more finished matches than any cube league entry has
+CONSTRUCTED_MAX_CARDS = 45               # one deck plus sideboard, not a run of cube decks
 
 
 # -- matches, summarised and cached ---------------------------------------------
@@ -193,10 +216,6 @@ def scan_drafts(log_dir: str | Path | None) -> list[DraftSummary]:
     return out
 
 
-LINK_THRESHOLD = 0.6
-NO_CARDS_WINDOW = timedelta(hours=6)     # a match that showed none of your cards: the draft just before it
-
-
 def shown_by(m: MatchSummary, hero: str) -> set[str]:
     """Non-basic cards ``hero`` showed anywhere in the match."""
     out: set[str] = set()
@@ -242,6 +261,107 @@ def hero_of(drafts: list[DraftSummary], pattern: str | None = None) -> str | Non
     return M.guess_hero(pattern)
 
 
+# -- decks: one league entry each -----------------------------------------------------
+
+
+@dataclass
+class Deck:
+    start: datetime
+    matches: list[MatchSummary]
+    cards: set[str]                   # non-basics you showed across its matches
+    source: str                       # "draft" (a logged draft), "inferred" (from the matches), "constructed"
+    draft: DraftSummary | None = None
+    seed: set[str] = field(default_factory=set)   # constructed detection: the first match's cards
+
+    @property
+    def end(self) -> datetime:
+        return max((m.start for m in self.matches if m.start), default=self.start)
+
+
+def _chain(matches: list[MatchSummary], hero: str, threshold: float, window: timedelta,
+           max_finished: int | None) -> list[Deck]:
+    """Greedy time-ordered grouping of matches by shown-card overlap."""
+    decks: list[Deck] = []
+    for m in matches:
+        if m.start is None:
+            continue
+        shown = shown_by(m, hero)
+        best: tuple[Deck, float] | None = None
+        for d in decks[-8:]:
+            if m.start - d.end > window or m.start < d.start:
+                continue
+            if max_finished is not None and sum(1 for x in d.matches if x.winner) >= max_finished:
+                continue
+            if not shown:                               # nothing shown: the deck just before it
+                if m.start - d.end <= NO_CARDS_WINDOW:
+                    best = (d, 1.0)
+                    break
+                continue
+            score = len(shown & d.cards) / len(shown)
+            if score >= threshold and (best is None or score > best[1]):
+                best = (d, score)
+        if best is None:
+            decks.append(Deck(start=m.start, matches=[m], cards=set(shown), source="inferred"))
+        else:
+            best[0].matches.append(m)
+            best[0].cards |= shown
+    return decks
+
+
+def _seed_chains(matches: list[MatchSummary], hero: str) -> list[Deck]:
+    """Group matches that keep showing the cards of the group's first match: one constructed deck."""
+    decks: list[Deck] = []
+    for m in matches:
+        if m.start is None:
+            continue
+        shown = shown_by(m, hero)
+        best: tuple[Deck, float] | None = None
+        for d in decks[-12:]:
+            if m.start - d.end > CONSTRUCTED_WINDOW or not shown or not d.seed:
+                continue
+            both = len(shown & d.seed)
+            if both / len(shown) >= CONSTRUCTED_THRESHOLD and both / len(d.seed) >= CONSTRUCTED_THRESHOLD:
+                score = both / len(shown)
+                if best is None or score > best[1]:
+                    best = (d, score)
+        if best is None:
+            decks.append(Deck(start=m.start, matches=[m], cards=set(shown), source="constructed", seed=set(shown)))
+        else:
+            best[0].matches.append(m)
+            best[0].cards |= shown
+    return decks
+
+
+def build_decks(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str | None) -> list[Deck]:
+    """Every deck you played: logged drafts first, then inferred and constructed ones from the rest."""
+    if hero is None:
+        return []
+    mine = [m for m in matches if hero in m.players and len(m.players) == 2 and m.start is not None]
+    linked = link_matches(drafts, mine, hero)
+    decks: list[Deck] = []
+    taken: set[str] = set()
+    for d in drafts:
+        ms = linked.get(d.path, [])
+        cards: set[str] = set()
+        for m in ms:
+            cards |= shown_by(m, hero)
+            taken.add(m.match_id)
+        decks.append(Deck(start=d.started_at, matches=ms, cards=cards, source="draft", draft=d))
+    rest = [m for m in mine if m.match_id not in taken]
+    # pass 1: one small pool of cards played five or more times in a week is a constructed deck
+    constructed: set[str] = set()
+    for chain in _seed_chains(rest, hero):
+        finished = sum(1 for m in chain.matches if m.winner)
+        if finished >= CONSTRUCTED_MIN_FINISHED and len(chain.cards) <= CONSTRUCTED_MAX_CARDS:
+            decks.append(chain)
+            constructed.update(m.match_id for m in chain.matches)
+    # pass 2: the rest are league entries of up to three finished matches
+    decks.extend(_chain([m for m in rest if m.match_id not in constructed], hero,
+                        DECK_THRESHOLD, DECK_WINDOW, DECK_MAX_MATCHES))
+    decks.sort(key=lambda d: d.start)
+    return decks
+
+
 # -- the numbers --------------------------------------------------------------------
 
 
@@ -253,10 +373,20 @@ def _result(m: MatchSummary, hero: str) -> str | None:
     return None
 
 
+def _new_card(name: str) -> dict:
+    return {"name": name,
+            # decks (draft or inferred) you showed the card in
+            "played": 0, "play_w": 0, "play_l": 0, "play_trophies": 0,
+            # logged drafts you took the card in
+            "picked": 0, "picked_with_matches": 0, "pick_w": 0, "pick_l": 0, "pick_trophies": 0,
+            # games the log shows you with it: cube decks / every match on disk
+            "cube_g": 0, "cube_w": 0, "all_g": 0, "all_w": 0}
+
+
 def compute(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str | None,
             pattern: str | None = None) -> dict:
     hero = hero or hero_of(drafts, pattern)
-    linked = link_matches(drafts, matches, hero)
+    decks = build_decks(drafts, matches, hero)
     opponents: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     with_result = 0
     for m in matches:
@@ -269,73 +399,70 @@ def compute(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str |
         opp = next(p for p in m.players if p != hero)
         opponents[opp][0 if r == "W" else 1] += 1
 
-    cards: dict[str, dict] = defaultdict(lambda: {
-        "name": "", "picked": 0, "pick_w": 0, "pick_l": 0, "trophies": 0, "drafts_with_matches": 0,
-        "gih_g": 0, "gih_w": 0, "gih_m": 0, "gih_mw": 0, "all_g": 0, "all_w": 0,
-    })
+    cards: dict[str, dict] = {}
 
     def card(name: str) -> dict:
-        c = cards[name]
-        c["name"] = name
+        c = cards.get(name)
+        if c is None:
+            c = cards[name] = _new_card(name)
         return c
 
-    draft_rows = []
-    for d in drafts:
-        ms = linked.get(d.path, [])
-        w = sum(1 for m in ms if _result(m, hero) == "W")
-        l = sum(1 for m in ms if _result(m, hero) == "L")
+    deck_rows = []
+    for d in decks:
+        w = sum(1 for m in d.matches if _result(m, hero) == "W")
+        l = sum(1 for m in d.matches if _result(m, hero) == "L")
         trophy = w >= 3 and l == 0
-        for name in set(d.picks):
-            c = card(name)
-            c["picked"] += 1
-            if ms:
-                c["drafts_with_matches"] += 1
-                c["pick_w"] += w
-                c["pick_l"] += l
-                c["trophies"] += int(trophy)
-        for m in ms:
-            seen_in_match: set[str] = set()
+        cube = d.source != "constructed"
+        if d.draft is not None:
+            for name in set(d.draft.picks):
+                c = card(name)
+                c["picked"] += 1
+                if d.matches:
+                    c["picked_with_matches"] += 1
+                    c["pick_w"] += w
+                    c["pick_l"] += l
+                    c["pick_trophies"] += int(trophy)
+        if cube and d.matches:
+            for name in d.cards:
+                c = card(name)
+                c["played"] += 1
+                c["play_w"] += w
+                c["play_l"] += l
+                c["play_trophies"] += int(trophy)
+        for m in d.matches:
             for g in m.games:
                 if not g["winner"]:
                     continue
-                for name in g["seen"].get(hero, []):
-                    c = card(name)
-                    c["gih_g"] += 1
-                    c["gih_w"] += int(g["winner"] == hero)
-                    seen_in_match.add(name)
-            r = _result(m, hero)
-            if r:
-                for name in seen_in_match:
-                    card(name)["gih_m"] += 1
-                    card(name)["gih_mw"] += int(r == "W")
-        draft_rows.append({
-            "path": Path(d.path).name, "event_id": d.event_id, "started_at": d.started_at.isoformat(timespec="seconds"),
-            "set_name": d.set_name, "players": d.players, "matches": len(ms), "w": w, "l": l, "trophy": trophy,
-            "opponents": [{"name": next(p for p in m.players if p != hero), "result": _result(m, hero), "score": m.score}
-                          for m in ms],
-        })
-    # every match on disk, all formats
-    if hero is not None:
-        for m in matches:
-            if hero not in m.players:
-                continue
-            for g in m.games:
-                if not g["winner"]:
-                    continue
+                won = int(g["winner"] == hero)
                 for name in g["seen"].get(hero, []):
                     c = card(name)
                     c["all_g"] += 1
-                    c["all_w"] += int(g["winner"] == hero)
-    rows = sorted(cards.values(), key=lambda c: (-c["picked"], -c["gih_g"], c["name"]))
+                    c["all_w"] += won
+                    if cube:
+                        c["cube_g"] += 1
+                        c["cube_w"] += won
+        deck_rows.append({
+            "started_at": d.start.isoformat(timespec="seconds"), "source": d.source,
+            "draft": Path(d.draft.path).name if d.draft else None, "set_name": d.draft.set_name if d.draft else None,
+            "players": d.draft.players if d.draft else [], "cards": len(d.cards),
+            "matches": len(d.matches), "w": w, "l": l, "trophy": trophy,
+            "opponents": [{"name": next(p for p in m.players if p != hero), "result": _result(m, hero), "score": m.score}
+                          for m in d.matches],
+        })
+    rows = sorted(cards.values(), key=lambda c: (-c["played"], -c["cube_g"], c["name"]))
+    cube_decks = [d for d in decks if d.source != "constructed" and d.matches]
     return {
         "hero": hero,
         "matches": len(matches),
         "matches_with_result": with_result,
         "drafts": len(drafts),
-        "drafts_linked": sum(1 for d in drafts if linked.get(d.path)),
+        "decks": len(cube_decks),
+        "decks_from_drafts": sum(1 for d in cube_decks if d.source == "draft"),
+        "decks_inferred": sum(1 for d in cube_decks if d.source == "inferred"),
+        "constructed_matches": sum(len(d.matches) for d in decks if d.source == "constructed"),
         "cards": rows,
         "opponents": dict(opponents),
-        "draft_rows": draft_rows,
+        "deck_rows": deck_rows,
     }
 
 
@@ -410,8 +537,9 @@ class History:
 
     @staticmethod
     def _empty() -> dict:
-        return {"hero": None, "matches": 0, "matches_with_result": 0, "drafts": 0, "drafts_linked": 0,
-                "cards": [], "opponents": {}, "draft_rows": []}
+        return {"hero": None, "matches": 0, "matches_with_result": 0, "drafts": 0, "decks": 0,
+                "decks_from_drafts": 0, "decks_inferred": 0, "constructed_matches": 0,
+                "cards": [], "opponents": {}, "deck_rows": []}
 
     def snapshot(self) -> dict:
         with self._lock:

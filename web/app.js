@@ -11,7 +11,7 @@
   let lastState = null, cards = {}, ratings = {}, lastMeta = null, lastCommitted = -1;
 
   // ------------------------------------------------------------ prefs
-  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle", statsScope: "cube", statsSort: { key: "picked", dir: -1 } };
+  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle", statsScope: "cube", statsSort: { key: "games", dir: -1 }, statsMin: 3 };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem("draftPrefs") || "{}")); } catch (e) { /* ignore */ }
   function savePrefs() { try { localStorage.setItem("draftPrefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ } }
 
@@ -620,6 +620,11 @@
   $("stats-cube").addEventListener("click", () => { prefs.statsScope = "cube"; savePrefs(); renderStats(); });
   $("stats-all").addEventListener("click", () => { prefs.statsScope = "all"; savePrefs(); renderStats(); });
   $("stats-find").addEventListener("input", () => renderStats());
+  // the two sorts people actually want, one click each; any column header still sorts too
+  $("sort-count").addEventListener("click", () => { prefs.statsSort = { key: "games", dir: -1 }; savePrefs(); renderStats(); });
+  $("sort-wr").addEventListener("click", () => { prefs.statsSort = { key: "wr", dir: -1 }; savePrefs(); renderStats(); });
+  $("stats-min").value = String(prefs.statsMin == null ? 3 : prefs.statsMin);
+  $("stats-min").addEventListener("input", () => { prefs.statsMin = Math.max(0, Number($("stats-min").value) || 0); savePrefs(); renderStats(); });
   const pct = (w, g) => g ? `${(100 * w / g).toFixed(0)}%` : "";
   function renderStats() {
     const h = hist, all = prefs.statsScope === "all";
@@ -629,21 +634,22 @@
     if (!h) { note.textContent = ""; empty.textContent = "Loading your match history…"; return; }
     if (h.status === "disabled") { note.textContent = ""; empty.textContent = "History is off for this run (--no-history)."; return; }
     if (h.status === "scanning" && !h.cards.length) { note.textContent = ""; empty.textContent = "Reading the MTGO match logs for the first time; this takes a few seconds."; return; }
-    note.textContent = `${h.hero || "?"} · ${h.drafts_linked} draft${h.drafts_linked === 1 ? "" : "s"} with matches · ${h.matches_with_result} matches on disk${h.error ? " · error: " + h.error : ""}`;
-    // columns: key -> (label, value, sort value); the GIH pair follows the scope
-    const gG = all ? "all_g" : "gih_g", gW = all ? "all_w" : "gih_w";
-    // "played" = games where the log shows you with the card, counted once per game
-    // however often it was cast; MTGO never names draws or hand, so it is not GIH
+    note.textContent = `${h.hero || "?"} · ${h.decks} cube deck${h.decks === 1 ? "" : "s"} (${h.decks_from_drafts} from draft logs, ${h.decks_inferred} inferred) · ${h.matches_with_result} matches on disk${h.constructed_matches ? ` · ${h.constructed_matches} constructed set aside` : ""}${h.error ? " · error: " + h.error : ""}`;
+    // columns: key -> (label, cell text, sort value, [big figure]); the games pair follows the scope
+    const gG = all ? "all_g" : "cube_g", gW = all ? "all_w" : "cube_w";
     const cols = [
       ["name", "Card", (c) => c.name, (c) => c.name.toLowerCase()],
-      ["picked", "Drafts picked", (c) => String(c.picked), (c) => c.picked],
-      ["matches", "Matches when picked", (c) => String(c.pick_w + c.pick_l), (c) => c.pick_w + c.pick_l],
-      ["pick_wr", "Match WR when picked", (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : "", (c) => c.pick_w + c.pick_l ? c.pick_w / (c.pick_w + c.pick_l) : -1, (c) => pct(c.pick_w, c.pick_w + c.pick_l)],
-      ["trophies", "Trophies / drafts", (c) => c.drafts_with_matches ? `${c.trophies} / ${c.drafts_with_matches}` : "", (c) => c.drafts_with_matches ? c.trophies / c.drafts_with_matches : -1, (c) => pct(c.trophies, c.drafts_with_matches)],
+      ["played", "Decks played", (c) => String(c.played), (c) => c.played],
+      ["matches", "Matches", (c) => String(c.play_w + c.play_l), (c) => c.play_w + c.play_l],
+      ["match_wr", "Match WR", (c) => c.play_w + c.play_l ? `${c.play_w}-${c.play_l}` : "", (c) => c.play_w + c.play_l ? c.play_w / (c.play_w + c.play_l) : -1, (c) => pct(c.play_w, c.play_w + c.play_l)],
+      ["trophies", "Trophies / decks", (c) => c.played ? `${c.play_trophies} / ${c.played}` : "", (c) => c.played ? c.play_trophies / c.played : -1, (c) => pct(c.play_trophies, c.played)],
       ["games", all ? "Games played (all formats)" : "Games played (cube)", (c) => String(c[gG]), (c) => c[gG]],
-      ["played_wr", "Game WR when played", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
+      ["wr", "Game WR", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
+      ["picked", "Picked (logged drafts)", (c) => c.picked ? String(c.picked) : "", (c) => c.picked, (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : ""],
     ];
-    const sort = prefs.statsSort || { key: "picked", dir: -1 };
+    const sort = prefs.statsSort || { key: "games", dir: -1 };
+    $("sort-count").classList.toggle("on", sort.key === "games"); $("sort-wr").classList.toggle("on", sort.key === "wr");
+    const minGames = Math.max(0, Number(prefs.statsMin) || 0);
     for (const [key, label] of cols) {
       const th = el("th", key === sort.key ? "on" : "", label + (key === sort.key ? (sort.dir < 0 ? " ▾" : " ▴") : ""));
       th.addEventListener("click", () => { prefs.statsSort = { key, dir: key === sort.key ? -sort.dir : (key === "name" ? 1 : -1) }; savePrefs(); renderStats(); });
@@ -651,29 +657,31 @@
     }
     const q = $("stats-find").value.trim().toLowerCase();
     let rows = h.cards.filter((c) => !q || c.name.toLowerCase().includes(q));
-    if (!all) rows = rows.filter((c) => c.picked || c.gih_g);                 // cube scope: cards from your drafts
-    const col = cols.find((c) => c[0] === sort.key) || cols[1];
+    if (!all) rows = rows.filter((c) => c.played || c.picked || c.cube_g);      // cube scope: cards from your cube decks
+    rows = rows.filter((c) => c[gG] >= minGames || (!q ? false : true));         // a search still finds a card below the minimum
+    const col = cols.find((c) => c[0] === sort.key) || cols[5];
     rows.sort((a, b) => { const x = col[3](a), y = col[3](b); return (x < y ? -1 : x > y ? 1 : 0) * sort.dir || a.name.localeCompare(b.name); });
-    empty.textContent = rows.length ? "" : (h.cards.length ? "No card matches that search." : "No drafts with matches yet: card stats appear once a draft's matches are in the match logs.");
+    empty.textContent = rows.length ? "" : (h.cards.length ? (q ? "No card matches that search." : `No card has ${minGames} games yet; lower the minimum.`) : "No decks with matches yet: card stats appear once your matches are in the match logs.");
     for (const c of rows) {
-      const tr = el("tr", (all ? c[gG] : c.drafts_with_matches || c.gih_g) ? "" : "thin");
+      const tr = el("tr", c[gG] ? "" : "thin");
       for (const [key, , text, , extra] of cols) {
         const td = el("td", key === "name" ? "name" : "");
         if (key === "name") { td.textContent = c.name; td.dataset.card = c.name; }
-        else if (extra) { const v = text(c); if (v) { td.appendChild(el("span", "wr", extra(c))); td.appendChild(el("span", "n", v)); } }
+        else if (extra) { const v = text(c); if (v) { const big = extra(c); if (big) td.appendChild(el("span", "wr", big)); td.appendChild(el("span", "n", v)); } }
         else td.textContent = text(c);
         tr.appendChild(td);
       }
       body.appendChild(tr);
     }
-    // drafts with their matches: where the numbers come from
+    // the decks the numbers come from, newest first
     const list = $("drafts-list"); clear(list);
-    const ds = (h.draft_rows || []).filter((d) => d.matches).slice().reverse();
-    $("drafts-note").textContent = ds.length ? `${ds.filter((d) => d.trophy).length} trophies in ${ds.length} drafts · a trophy is 3 match wins and no losses` : "";
+    const ds = (h.deck_rows || []).filter((d) => d.matches && d.source !== "constructed").slice().reverse();
+    $("drafts-note").textContent = ds.length ? `${ds.filter((d) => d.trophy).length} trophies in ${ds.length} decks · a trophy is 3 match wins and no losses · "inferred" decks are grouped from the match logs alone` : "";
     $("pane-drafts").hidden = !ds.length;
     for (const d of ds) {
       const row = el("div", "drafts-row");
       row.appendChild(el("span", "when", d.started_at.replace("T", " ").slice(0, 16)));
+      row.appendChild(el("span", "src", d.source === "draft" ? "draft log" : "inferred"));
       row.appendChild(el("span", "rec" + (d.trophy ? " trophy" : ""), `${d.w}-${d.l}${d.trophy ? " 🏆" : ""}`));
       const opps = el("span", "opps");
       // the log's score is the winner's; show it from your side

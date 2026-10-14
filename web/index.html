@@ -154,17 +154,19 @@
     <section class="sec">
       <div class="sec-head">
         <h2>Your card stats</h2>
-        <div class="tabs small"><button id="stats-cube" type="button" class="on">Cube drafts</button><button id="stats-all" type="button">All matches</button></div>
+        <div class="tabs small"><button id="stats-cube" type="button" class="on">Cube decks</button><button id="stats-all" type="button">All matches</button></div>
+        <div class="tabs small"><button id="sort-count" type="button" class="on">Most played</button><button id="sort-wr" type="button">Best win rate</button></div>
+        <label class="minwrap">min games <input id="stats-min" type="number" min="0" step="1" value="3"></label>
         <span id="stats-note" class="note"></span>
         <input id="stats-find" class="right" type="search" placeholder="find a card" autocomplete="off" spellcheck="false">
       </div>
-      <p id="stats-hint" class="hint">Click a column to sort. "Played" counts a game once when the match log shows you with the card (cast, played, discarded, milled…), however many times you cast it. MTGO never names your draws or hand, so this is not a game-in-hand rate: a card you held but never cast is not counted. "When picked" covers every match of a draft you took the card in, whether or not you played it.</p>
+      <p id="stats-hint" class="hint">Click any column to sort by it. A "deck" is one league entry: its matches are grouped by the cards you showed (a logged draft where one exists, inferred from the match logs before that). "Played" counts a game once when the match log shows you with the card, however many times you cast it; MTGO never names draws or hand, so a card you held but never cast is not counted.</p>
       <p id="stats-empty" class="empty"></p>
       <table id="stats-table" class="stats"><thead><tr></tr></thead><tbody></tbody></table>
     </section>
     <section class="sec" id="pane-drafts">
       <div class="sec-head">
-        <h2>Drafts with match data</h2>
+        <h2>Decks</h2>
         <span id="drafts-note" class="note"></span>
       </div>
       <div id="drafts-list"></div>

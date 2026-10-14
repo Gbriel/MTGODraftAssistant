@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from mtgo_draft_assistant import matches as M  # noqa: E402
 from mtgo_draft_assistant.history import (  # noqa: E402
-    History, MatchIndex, MatchSummary, compute, link_matches, scan_drafts, shown_by, summarise,
+    History, MatchIndex, MatchSummary, build_decks, compute, link_matches, scan_drafts, shown_by, summarise,
 )
 
 FIX = Path(ROOT) / "tests" / "fixtures"
@@ -89,24 +89,76 @@ def test_compute_card_and_opponent_stats(tmp_path):
     snap = compute(drafts, [m], None)
     assert snap["hero"] == HERO                                # from the draft logs' arrow
     assert snap["opponents"] == {"jojo_lefou": [1, 0]} and snap["matches_with_result"] == 1
-    assert snap["drafts"] == 3 and snap["drafts_linked"] == 1
+    assert snap["drafts"] == 3 and snap["decks"] == 1 and snap["decks_from_drafts"] == 1 and snap["decks_inferred"] == 0
     cards = {c["name"]: c for c in snap["cards"]}
     d922 = drafts[-1]
     name = next(n for n in shown_by(m, HERO) if n in d922.picks)
     c = cards[name]
     seen_games = [g for g in m.games if name in g["seen"][HERO]]
-    assert c["picked"] >= 1 and c["drafts_with_matches"] == 1 and (c["pick_w"], c["pick_l"]) == (1, 0) and c["trophies"] == 0
-    assert c["gih_g"] == len(seen_games) and c["gih_w"] == sum(g["winner"] == HERO for g in seen_games)
-    assert (c["gih_m"], c["gih_mw"]) == (1, 1) and c["all_g"] == c["gih_g"]
+    assert c["played"] == 1 and (c["play_w"], c["play_l"]) == (1, 0) and c["play_trophies"] == 0
+    assert c["picked"] >= 1 and c["picked_with_matches"] == 1 and (c["pick_w"], c["pick_l"]) == (1, 0)
+    assert c["cube_g"] == len(seen_games) and c["cube_w"] == sum(g["winner"] == HERO for g in seen_games)
+    assert (c["all_g"], c["all_w"]) == (c["cube_g"], c["cube_w"])
     # a card picked only in a draft without matches has no record
     only_921 = next(n for n in drafts[0].picks if n not in d922.picks and n not in drafts[1].picks)
-    assert cards[only_921]["picked"] == 1 and cards[only_921]["drafts_with_matches"] == 0 and cards[only_921]["gih_g"] == 0
-    # three wins and no losses in the draft is a trophy
+    assert cards[only_921]["picked"] == 1 and cards[only_921]["played"] == 0 and cards[only_921]["cube_g"] == 0
+    # three wins and no losses in the deck is a trophy
     more = [dataclasses.replace(m, match_id=f"m{i}", started_at=f"2026-09-22T1{i}:00:00") for i in range(3)]
     snap3 = compute(drafts, more, HERO)
-    assert snap3["draft_rows"][-1]["trophy"] and snap3["draft_rows"][-1]["w"] == 3
-    assert {c["name"]: c for c in snap3["cards"]}[name]["trophies"] == 1
+    assert snap3["deck_rows"][-1]["trophy"] and snap3["deck_rows"][-1]["w"] == 3 and snap3["deck_rows"][-1]["source"] == "draft"
+    assert {c["name"]: c for c in snap3["cards"]}[name]["play_trophies"] == 1
     assert snap3["opponents"] == {"jojo_lefou": [3, 0]}
+
+
+def _match(mid: str, when: str, cards: list[str], won: bool = True, opp: str = "opp") -> MatchSummary:
+    return MatchSummary(match_id=mid, path="", started_at=when, players=[HERO, opp],
+                        winner=HERO if won else opp, score="2-0",
+                        games=[{"winner": HERO if won else opp, "seen": {HERO: cards, opp: ["Their Card"]}}])
+
+
+def test_decks_are_inferred_from_the_matches_when_no_draft_log_exists():
+    A = [f"a{i}" for i in range(20)]                   # one deck: each match shows a different ~half of it
+    B = [f"b{i}" for i in range(20)]
+    ms = [
+        _match("a1", "2025-03-01T10:00:00", A[:12]),
+        _match("a2", "2025-03-01T10:40:00", A[6:18], won=False),
+        _match("a3", "2025-03-01T11:20:00", A[10:20] + A[:2]),
+        _match("b1", "2025-03-01T13:00:00", B[:12]),             # same day, different cards: a new deck
+        _match("b2", "2025-03-01T13:45:00", B[5:17]),
+        _match("b3", "2025-03-01T14:30:00", B[8:20]),
+        _match("a4", "2025-03-01T16:00:00", A[:12]),             # deck A again after three finished matches: a fourth entry
+        _match("c1", "2025-03-09T10:00:00", A[:12]),             # a week later: too far to join either
+    ]
+    decks = build_decks([], ms, HERO)
+    groups = [[m.match_id for m in d.matches] for d in decks]
+    assert groups == [["a1", "a2", "a3"], ["b1", "b2", "b3"], ["a4"], ["c1"]]
+    assert all(d.source == "inferred" for d in decks)
+    snap = compute([], ms, HERO)
+    assert snap["decks"] == 4 and snap["decks_inferred"] == 4 and snap["decks_from_drafts"] == 0
+    rows = snap["deck_rows"]
+    assert (rows[0]["w"], rows[0]["l"], rows[0]["trophy"]) == (2, 1, False) and rows[1]["trophy"]
+    cards = {c["name"]: c for c in snap["cards"]}
+    assert cards["a0"]["played"] == 3 and (cards["a0"]["play_w"], cards["a0"]["play_l"]) == (4, 1)   # a1-3, a4, c1
+    assert cards["b0"]["played"] == 1 and cards["b0"]["play_trophies"] == 1 and cards["b0"]["cube_g"] == 1
+    assert cards["a11"]["cube_g"] == 5 and cards["a11"]["cube_w"] == 4                             # a1 a2(L) a3 a4 c1
+    assert "Their Card" not in cards
+
+
+def test_constructed_chains_are_set_aside():
+    deck = [f"legacy{i}" for i in range(20)]
+    # twelve matches over three days, each showing 12 of the deck's 16 non-basics
+    ms = [_match(f"l{i}", f"2025-05-{1 + i // 4:02d}T{10 + 2 * (i % 4):02d}:00:00", deck[(i % 3) * 2:(i % 3) * 2 + 12], won=i % 2 == 0)
+          for i in range(12)]
+    ms.append(_match("cube1", "2025-05-04T10:00:00", ["x1", "x2", "x3", "x4", "x5"]))
+    decks = build_decks([], ms, HERO)
+    srcs = sorted((d.source, len(d.matches)) for d in decks)
+    assert srcs == [("constructed", 12), ("inferred", 1)]
+    snap = compute([], ms, HERO)
+    assert snap["constructed_matches"] == 12 and snap["decks"] == 1
+    cards = {c["name"]: c for c in snap["cards"]}
+    assert cards["legacy0"]["played"] == 0 and cards["legacy0"]["cube_g"] == 0 and cards["legacy0"]["all_g"] == 4   # the four deck[0:12] matches
+    assert cards["x1"]["played"] == 1 and cards["x1"]["cube_g"] == 1
+    assert snap["opponents"] == {"opp": [7, 6]}
 
 
 def test_history_object_refreshes_and_answers_records(tmp_path):

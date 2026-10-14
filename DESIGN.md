@@ -155,6 +155,19 @@ Picked: Broadside Bombardiers
   low against every draft and stay unlinked. The old deployment folders
   still hold copies of earlier match logs, so count by match id. A trophy is
   three match wins and no losses in the draft.
+- **Decks without a draft log** (everything before 2026-09-21; no other
+  draft logs exist anywhere on the disk, searched 2026-10-13) are inferred
+  from the matches: in time order, a match joins the latest open deck whose
+  shown cards it overlaps by ≥ 0.25, within 24 h, while that deck has fewer
+  than three finished matches. Tuned against the 19 logged drafts: all 58
+  same-draft pairs reproduced, none merged or split wrongly. The threshold
+  is lower than the 0.6 used against draft logs because one match shows
+  only ~15 of a deck's ~23 non-basics, so two matches of one deck overlap
+  by ~0.5. Comparing with the group's *union* of cards must not be used for
+  long chains: a run of similar cube decks snowballed to 485 matches and
+  530 cards. Constructed detection compares with the group's first match
+  instead (≥ 0.4 both ways, ≥ 5 finished matches, ≤ 45 cards); this
+  machine has no such deck, every match on it is cube.
 - **No decklist anywhere on disk** (searched all 41,104 files MTGO keeps,
   2026-10-07). The only source is the client's deck editor Export, a `.dek`
   XML file (`<Cards CatID Quantity Sideboard Name/>`), which the user saves

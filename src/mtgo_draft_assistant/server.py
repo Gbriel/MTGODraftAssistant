@@ -229,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.server.store.get())
         elif path == "/api/history":
             h = self.server.on_history
-            self._json(h() if h is not None else {"status": "disabled", "cards": [], "opponents": {}, "draft_rows": []})
+            self._json(h() if h is not None else {"status": "disabled", "cards": [], "opponents": {}, "deck_rows": []})
         elif path == "/events":
             self._sse()
         elif path.startswith("/img/"):
