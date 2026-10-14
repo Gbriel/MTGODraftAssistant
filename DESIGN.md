@@ -168,6 +168,20 @@ Picked: Broadside Bombardiers
   530 cards. Constructed detection compares with the group's first match
   instead (≥ 0.4 both ways, ≥ 5 finished matches, ≤ 45 cards); this
   machine has no such deck, every match on it is cube.
+- **A match the loser walks out of has no "wins the match" line.** The log
+  ends with `X leads the match 1-0` and `Y has left the game` / `has lost
+  connection to the game`. MTGO awards the match; the log never says so.
+  `matches.py` infers the result from two game wins, or from the lead when
+  the other player left (`result_source` says which). 1,260 of 1,297 matches
+  have the line, 9 are inferred, 26 stay undecided (1-1 when someone left,
+  or a stub where nobody played).
+- **Decks with one or two matches are real, not log gaps** (2026-10-14): 52
+  singles and 35 pairs out of 475. Re-clustering with symmetric overlap,
+  stub handling or a looser cap moves the count by single digits, no match
+  log on disk is being discarded, and the singles are 33 losses to 12 wins.
+  A round-3 bye in an 8-player event with drops, an opponent who never
+  shows, and a drop after a loss all produce a win or an exit with **no
+  match log**; those matches cannot be recovered from this machine.
 - **No decklist anywhere on disk** (searched all 41,104 files MTGO keeps,
   2026-10-07). The only source is the client's deck editor Export, a `.dek`
   XML file (`<Cards CatID Quantity Sideboard Name/>`), which the user saves

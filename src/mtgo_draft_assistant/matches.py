@@ -63,6 +63,8 @@ JOINED = re.compile(r"^(.+?) joined the game\.$")
 OPENING = re.compile(r"^(.+?) (?:puts? .*? and )?begins the game with (\w+) cards? in hand\.$")
 WINS_GAME = re.compile(r"^(.+?) wins the game\.?$")
 WINS_MATCH = re.compile(r"^(.+?) wins the match (\d+)-(\d+)")
+LEADS = re.compile(r"^(.+?) leads the match (\d+)-(\d+)")
+LEFT = re.compile(r"^(.+?) has (?:left the game|lost connection to the game)")
 CONCEDE = re.compile(r"^(.+?) has conceded")
 WORDS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
 
@@ -185,6 +187,9 @@ class MatchLog:
     games: list[GameLog] = field(default_factory=list)
     winner: str | None = None
     score: str | None = None
+    # "match line" (X wins the match), "game wins" (two game wins, no match line),
+    # "opponent left" (led the match, the other player left or lost connection), or None
+    result_source: str | None = None
     last_at: datetime | None = None
 
     @property
@@ -199,6 +204,8 @@ class MatchLog:
 def parse_match(b: bytes, match_id: str = "", path: Path | None = None) -> MatchLog:
     m = MatchLog(match_id=match_id, path=path)
     game: GameLog | None = None
+    leader: str | None = None            # "X leads the match 1-0"
+    left: set[str] = set()               # players who left or lost connection after the last lead line
     for rec in parse_records(b):
         m.last_at = rec.at
         raw = rec.text
@@ -229,7 +236,15 @@ def parse_match(b: bytes, match_id: str = "", path: Path | None = None) -> Match
             continue
         mw = WINS_MATCH.match(text)
         if mw:
-            m.winner, m.score = mw.group(1), f"{mw.group(2)}-{mw.group(3)}"
+            m.winner, m.score, m.result_source = mw.group(1), f"{mw.group(2)}-{mw.group(3)}", "match line"
+            continue
+        ml = LEADS.match(text)
+        if ml:
+            leader, left = ml.group(1), set()
+            continue
+        mleft = LEFT.match(text)
+        if mleft:
+            left.add(mleft.group(1))
             continue
         mg = WINS_GAME.match(text)
         if mg:
@@ -242,7 +257,27 @@ def parse_match(b: bytes, match_id: str = "", path: Path | None = None) -> Match
             continue
         if CARD_REF.search(raw):
             _attribute(game, raw)
+    if m.winner is None:
+        _infer_result(m, leader, left)
     return m
+
+
+def _infer_result(m: MatchLog, leader: str | None, left: set[str]) -> None:
+    """
+    No "wins the match" line. MTGO writes none when the loser leaves or drops
+    connection and never comes back, so the match is decided by game wins
+    (two of them) or by the lead at the moment the other player left. A 1-1
+    with nobody leaving stays undecided.
+    """
+    wins = Counter(g.winner for g in m.games if g.winner)
+    for who, n in wins.items():
+        if n >= 2:
+            others = sum(k for w, k in wins.items() if w != who)
+            m.winner, m.score, m.result_source = who, f"{n}-{others}", "game wins"
+            return
+    if leader is not None and left and all(p != leader for p in left) and len(m.players) == 2:
+        others = sum(k for w, k in wins.items() if w != leader)
+        m.winner, m.score, m.result_source = leader, f"{wins.get(leader, 0)}-{others}", "opponent left"
 
 
 # -- who a named card belongs to, and how it was last seen ----------------------

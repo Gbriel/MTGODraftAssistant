@@ -174,6 +174,49 @@ def test_watcher_follows_the_newest_log_after_the_draft(tmp_path):
 MATCH_BYTES = open(MATCH, "rb").read()
 
 
+# -- results without a "wins the match" line ------------------------------------------
+
+
+def _records(*lines: str) -> bytes:
+    """Encode text lines the way MTGO does: ticks, kind byte, 7-bit length, '@P' + text."""
+    import struct
+    out = b""
+    for i, t in enumerate(lines):
+        body = ("@P" + t).encode("utf-8")
+        n, length = len(body), b""
+        while True:
+            c, n = n & 0x7F, n >> 7
+            length += bytes([c | (0x80 if n else 0)])
+            if not n:
+                break
+        out += struct.pack("<q", 638_000_000_000_000_000 + i * 10_000_000) + b"\0" + length + body
+    return out
+
+
+def test_result_from_the_match_line():
+    m = parse_match(_records("A joined the game.", "B joined the game.", "A wins the game.", "A wins the game.", "A wins the match 2-0"))
+    assert (m.winner, m.score, m.result_source) == ("A", "2-0", "match line")
+
+
+def test_result_from_two_game_wins_when_the_loser_walked_out():
+    join = ("A joined the game.", "B joined the game.")          # every game starts with both joining
+    m = parse_match(_records(*join, "B wins the game.", *join, "A wins the game.",
+                             "A leads the match 1-1", *join, "A wins the game.", "B has left the game."))
+    assert (m.winner, m.score, m.result_source) == ("A", "2-1", "game wins")
+
+
+def test_result_from_the_lead_when_the_opponent_left():
+    m = parse_match(_records("A joined the game.", "B joined the game.", "B has conceded from the game.", "A wins the game.",
+                             "B has lost connection to the game.", "A leads the match 1-0", "B has left the game."))
+    assert (m.winner, m.score, m.result_source) == ("A", "1-0", "opponent left")
+    # the leader leaving is not a win for anyone
+    m2 = parse_match(_records("A joined the game.", "B joined the game.", "A wins the game.", "A leads the match 1-0", "A has left the game."))
+    assert m2.winner is None and m2.result_source is None
+    # 1-1 with nobody leaving stays undecided
+    m3 = parse_match(_records("A joined the game.", "B joined the game.", "A wins the game.", "B wins the game.", "B leads the match 1-1"))
+    assert m3.winner is None and not m3.over
+
+
 # -- attribution rules (DESIGN.md §2.3; measured over 2,521 real logs) --------------
 
 from mtgo_draft_assistant import matches as M  # noqa: E402

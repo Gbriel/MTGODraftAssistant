@@ -86,6 +86,7 @@ class MatchSummary:
     score: str | None
     # per game: {"winner": name|None, "seen": {player: [card names]}}
     games: list[dict] = field(default_factory=list)
+    result_source: str | None = None       # see MatchLog.result_source
 
     @property
     def start(self) -> datetime | None:
@@ -104,11 +105,14 @@ def summarise(m: M.MatchLog) -> MatchSummary:
         games.append({"winner": g.winner, "seen": seen})
     return MatchSummary(match_id=m.match_id, path=str(m.path) if m.path else "",
                         started_at=first.isoformat(timespec="seconds") if first else None,
-                        players=list(m.players), winner=m.winner, score=m.score, games=games)
+                        players=list(m.players), winner=m.winner, score=m.score, games=games,
+                        result_source=m.result_source)
 
 
 class MatchIndex:
     """Summaries of every match log matching ``pattern``, cached by (size, mtime)."""
+
+    TABLE = "matches_v2"      # v2: results inferred for matches the loser walked out of
 
     def __init__(self, cache_dir: str | Path | None, pattern: str | None = None) -> None:
         self.pattern = pattern
@@ -117,7 +121,8 @@ class MatchIndex:
         if cache_dir is not None:
             Path(cache_dir).mkdir(parents=True, exist_ok=True)
             self._db = sqlite3.connect(str(Path(cache_dir) / "history.sqlite"), check_same_thread=False)
-            self._db.execute("CREATE TABLE IF NOT EXISTS matches (path TEXT PRIMARY KEY, size INTEGER, "
+            # bump the table name whenever summarise() or parse_match() learn something new
+            self._db.execute(f"CREATE TABLE IF NOT EXISTS {self.TABLE} (path TEXT PRIMARY KEY, size INTEGER, "
                              "mtime_ns INTEGER, data TEXT)")
             self._db.commit()
         self._lock = threading.Lock()
@@ -128,7 +133,7 @@ class MatchIndex:
             return hit
         if self._db is None:
             return None
-        row = self._db.execute("SELECT size, mtime_ns, data FROM matches WHERE path=?", (path,)).fetchone()
+        row = self._db.execute(f"SELECT size, mtime_ns, data FROM {self.TABLE} WHERE path=?", (path,)).fetchone()
         if row is None:
             return None
         hit = (row[0], row[1], MatchSummary(**json.loads(row[2])))
@@ -138,7 +143,7 @@ class MatchIndex:
     def _store(self, path: str, size: int, mtime_ns: int, s: MatchSummary) -> None:
         self._mem[path] = (size, mtime_ns, s)
         if self._db is not None:
-            self._db.execute("INSERT OR REPLACE INTO matches VALUES (?,?,?,?)",
+            self._db.execute(f"INSERT OR REPLACE INTO {self.TABLE} VALUES (?,?,?,?)",
                              (path, size, mtime_ns, json.dumps(asdict(s))))
 
     def scan(self) -> list[MatchSummary]:
