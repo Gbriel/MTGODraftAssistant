@@ -435,6 +435,8 @@ def compute(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str |
                     continue
                 won = int(g["winner"] == hero)
                 for name in g["seen"].get(hero, []):
+                    if name in M.BASICS:                # every deck has them; a basic's "win rate" is yours
+                        continue
                     c = card(name)
                     c["all_g"] += 1
                     c["all_w"] += won
@@ -451,6 +453,23 @@ def compute(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str |
         })
     rows = sorted(cards.values(), key=lambda c: (-c["played"], -c["cube_g"], c["name"]))
     cube_decks = [d for d in decks if d.source != "constructed" and d.matches]
+    # your averages, to read a card's numbers against: cube decks, and every match on disk
+    totals = {"cube": {"decks": len(cube_decks), "trophies": 0, "m_w": 0, "m_l": 0, "g_w": 0, "g": 0},
+              "all": {"decks": None, "trophies": None, "m_w": 0, "m_l": 0, "g_w": 0, "g": 0}}
+    for d in decks:
+        cube = d.source != "constructed"
+        w = sum(1 for m in d.matches if _result(m, hero) == "W")
+        l = sum(1 for m in d.matches if _result(m, hero) == "L")
+        gw = sum(1 for m in d.matches for g in m.games if g["winner"] == hero)
+        gl = sum(1 for m in d.matches for g in m.games if g["winner"] and g["winner"] != hero)
+        for key in (("cube", "all") if cube else ("all",)):
+            t = totals[key]
+            t["m_w"] += w
+            t["m_l"] += l
+            t["g_w"] += gw
+            t["g"] += gw + gl
+        if cube and d.matches:
+            totals["cube"]["trophies"] += int(w >= 3 and l == 0)
     return {
         "hero": hero,
         "matches": len(matches),
@@ -463,6 +482,7 @@ def compute(drafts: list[DraftSummary], matches: list[MatchSummary], hero: str |
         "cards": rows,
         "opponents": dict(opponents),
         "deck_rows": deck_rows,
+        "totals": totals,
     }
 
 
@@ -539,7 +559,7 @@ class History:
     def _empty() -> dict:
         return {"hero": None, "matches": 0, "matches_with_result": 0, "drafts": 0, "decks": 0,
                 "decks_from_drafts": 0, "decks_inferred": 0, "constructed_matches": 0,
-                "cards": [], "opponents": {}, "deck_rows": []}
+                "cards": [], "opponents": {}, "deck_rows": [], "totals": None}
 
     def snapshot(self) -> dict:
         with self._lock:

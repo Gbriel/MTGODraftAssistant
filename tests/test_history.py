@@ -108,6 +108,10 @@ def test_compute_card_and_opponent_stats(tmp_path):
     assert snap3["deck_rows"][-1]["trophy"] and snap3["deck_rows"][-1]["w"] == 3 and snap3["deck_rows"][-1]["source"] == "draft"
     assert {c["name"]: c for c in snap3["cards"]}[name]["play_trophies"] == 1
     assert snap3["opponents"] == {"jojo_lefou": [3, 0]}
+    # your averages: the match fixture is 2-1 in games
+    assert snap["totals"]["cube"] == {"decks": 1, "trophies": 0, "m_w": 1, "m_l": 0, "g_w": 2, "g": 3}
+    assert snap["totals"]["all"]["m_w"] == 1 and snap["totals"]["all"]["g"] == 3
+    assert snap3["totals"]["cube"]["trophies"] == 1 and snap3["totals"]["cube"]["g_w"] == 6
 
 
 def _match(mid: str, when: str, cards: list[str], won: bool = True, opp: str = "opp") -> MatchSummary:
@@ -159,6 +163,9 @@ def test_constructed_chains_are_set_aside():
     assert cards["legacy0"]["played"] == 0 and cards["legacy0"]["cube_g"] == 0 and cards["legacy0"]["all_g"] == 4   # the four deck[0:12] matches
     assert cards["x1"]["played"] == 1 and cards["x1"]["cube_g"] == 1
     assert snap["opponents"] == {"opp": [7, 6]}
+    # constructed matches count in the all-formats averages only
+    assert (snap["totals"]["cube"]["m_w"], snap["totals"]["cube"]["m_l"]) == (1, 0)
+    assert (snap["totals"]["all"]["m_w"], snap["totals"]["all"]["m_l"]) == (7, 6)
 
 
 def test_history_object_refreshes_and_answers_records(tmp_path):

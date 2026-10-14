@@ -615,7 +615,7 @@
       hist = h; histVersion = lastState ? lastState.history_version : histVersion; histLoading = false;
       if (location.hash === "#stats") renderStats();
       if (h.status === "scanning") setTimeout(() => loadHistory(true), 2000);
-    }).catch(() => { histLoading = false; });
+    }).catch((e) => { console.error("history:", e); histLoading = false; });
   }
   $("stats-cube").addEventListener("click", () => { prefs.statsScope = "cube"; savePrefs(); renderStats(); });
   $("stats-all").addEventListener("click", () => { prefs.statsScope = "all"; savePrefs(); renderStats(); });
@@ -635,16 +635,31 @@
     if (h.status === "disabled") { note.textContent = ""; empty.textContent = "History is off for this run (--no-history)."; return; }
     if (h.status === "scanning" && !h.cards.length) { note.textContent = ""; empty.textContent = "Reading the MTGO match logs for the first time; this takes a few seconds."; return; }
     note.textContent = `${h.hero || "?"} · ${h.decks} cube deck${h.decks === 1 ? "" : "s"} (${h.decks_from_drafts} from draft logs, ${h.decks_inferred} inferred) · ${h.matches_with_result} matches on disk${h.constructed_matches ? ` · ${h.constructed_matches} constructed set aside` : ""}${h.error ? " · error: " + h.error : ""}`;
-    // columns: key -> (label, cell text, sort value, [big figure]); the games pair follows the scope
+    // your averages for this scope, so a card's rate reads against them
+    const t = (h.totals || {})[all ? "all" : "cube"], avg = $("stats-avg"); clear(avg);
+    const mWR = t && t.m_w + t.m_l ? t.m_w / (t.m_w + t.m_l) : null, gWR = t && t.g ? t.g_w / t.g : null;
+    const tWR = t && t.decks ? t.trophies / t.decks : null;
+    const stat = (label, big, small) => { const s = el("span"); s.appendChild(el("span", "lbl", label + " ")); s.appendChild(el("b", null, big)); if (small) s.appendChild(document.createTextNode(" " + small)); avg.appendChild(s); };
+    if (t) {
+      stat("Your match WR", mWR == null ? "–" : pct(t.m_w, t.m_w + t.m_l), `${t.m_w}-${t.m_l}`);
+      stat("game WR", gWR == null ? "–" : pct(t.g_w, t.g), `${t.g_w}-${t.g - t.g_w}`);
+      if (!all) stat("trophy rate", tWR == null ? "–" : pct(t.trophies, t.decks), `${t.trophies} / ${t.decks} decks`);
+      avg.appendChild(el("span", "lbl", all ? "every match on disk · green and red cells are above and below these" : "cube decks · green and red cells are above and below these"));
+    }
+    const vs = (rate, base) => rate == null || base == null ? "" : rate > base ? " up" : rate < base ? " down" : "";
+    // columns: key -> (label, cell text, sort value, [big figure], [class vs your average]); the games pair follows the scope
     const gG = all ? "all_g" : "cube_g", gW = all ? "all_w" : "cube_w";
     const cols = [
       ["name", "Card", (c) => c.name, (c) => c.name.toLowerCase()],
       ["played", "Decks played", (c) => String(c.played), (c) => c.played],
       ["matches", "Matches", (c) => String(c.play_w + c.play_l), (c) => c.play_w + c.play_l],
-      ["match_wr", "Match WR", (c) => c.play_w + c.play_l ? `${c.play_w}-${c.play_l}` : "", (c) => c.play_w + c.play_l ? c.play_w / (c.play_w + c.play_l) : -1, (c) => pct(c.play_w, c.play_w + c.play_l)],
-      ["trophies", "Trophies / decks", (c) => c.played ? `${c.play_trophies} / ${c.played}` : "", (c) => c.played ? c.play_trophies / c.played : -1, (c) => pct(c.play_trophies, c.played)],
+      ["match_wr", "Match WR", (c) => c.play_w + c.play_l ? `${c.play_w}-${c.play_l}` : "", (c) => c.play_w + c.play_l ? c.play_w / (c.play_w + c.play_l) : -1, (c) => pct(c.play_w, c.play_w + c.play_l),
+        (c) => vs(c.play_w + c.play_l ? c.play_w / (c.play_w + c.play_l) : null, mWR)],
+      ["trophies", "Trophies / decks", (c) => c.played ? `${c.play_trophies} / ${c.played}` : "", (c) => c.played ? c.play_trophies / c.played : -1, (c) => pct(c.play_trophies, c.played),
+        (c) => vs(c.played ? c.play_trophies / c.played : null, tWR)],
       ["games", all ? "Games played (all formats)" : "Games played (cube)", (c) => String(c[gG]), (c) => c[gG]],
-      ["wr", "Game WR", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
+      ["wr", "Game WR", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG]),
+        (c) => vs(c[gG] ? c[gW] / c[gG] : null, gWR)],
       ["picked", "Picked (logged drafts)", (c) => c.picked ? String(c.picked) : "", (c) => c.picked, (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : ""],
     ];
     const sort = prefs.statsSort || { key: "games", dir: -1 };
@@ -664,10 +679,10 @@
     empty.textContent = rows.length ? "" : (h.cards.length ? (q ? "No card matches that search." : `No card has ${minGames} games yet; lower the minimum.`) : "No decks with matches yet: card stats appear once your matches are in the match logs.");
     for (const c of rows) {
       const tr = el("tr", c[gG] ? "" : "thin");
-      for (const [key, , text, , extra] of cols) {
+      for (const [key, , text, , extra, tone] of cols) {
         const td = el("td", key === "name" ? "name" : "");
         if (key === "name") { td.textContent = c.name; td.dataset.card = c.name; }
-        else if (extra) { const v = text(c); if (v) { const big = extra(c); if (big) td.appendChild(el("span", "wr", big)); td.appendChild(el("span", "n", v)); } }
+        else if (extra) { const v = text(c); if (v) { const big = extra(c); if (big) td.appendChild(el("span", "wr" + (tone ? tone(c) : ""), big)); td.appendChild(el("span", "n", v)); } }
         else td.textContent = text(c);
         tr.appendChild(td);
       }

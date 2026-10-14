@@ -52,6 +52,14 @@ python -m mtgo_draft_assistant                 # opens http://127.0.0.1:8765/
 python -m mtgo_draft_assistant --log-dir C:\path --port 8765 --no-browser
 ```
 
+To check what the page actually renders (async data included), drive headless
+Chrome over DevTools; `--dump-dom` fires at the load event, before fetches
+resolve, and a virtual time budget hangs on the SSE stream:
+
+```bash
+node tools/render_check.mjs http://127.0.0.1:8765/#stats --wait "#stats-table tbody tr"
+```
+
 To watch the UI update without being in a draft, replay the fixtures into an
 empty scratch directory and point the server at it:
 
