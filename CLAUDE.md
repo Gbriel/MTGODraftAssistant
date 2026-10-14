@@ -140,8 +140,9 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   entrants, and the share of your shown non-basic cards that are among a
   draft's picks is 0.92–1.00 for the right draft and ≤0.50 for any other
   (DESIGN.md §2.3). Per card: drafts picked, record and trophies when
-  picked, and "GIH" = games where the log shows you with the card (MTGO
-  never names draws or hand). Per opponent: lifetime record, all formats.
+  picked, and "played" = games where the log shows you with the card, once
+  per game (MTGO never names draws or hand, so **don't call it GIH**; the
+  user objected). Per opponent: lifetime record, all formats.
   `/api/history` serves it; the state carries `records` for the pod and the
   current opponent, shown after names in the pod pane and the Deck tab. The
   **Card stats** tab (`#stats`) is a sortable, searchable table with a

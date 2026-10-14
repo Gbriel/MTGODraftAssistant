@@ -632,14 +632,16 @@
     note.textContent = `${h.hero || "?"} · ${h.drafts_linked} draft${h.drafts_linked === 1 ? "" : "s"} with matches · ${h.matches_with_result} matches on disk${h.error ? " · error: " + h.error : ""}`;
     // columns: key -> (label, value, sort value); the GIH pair follows the scope
     const gG = all ? "all_g" : "gih_g", gW = all ? "all_w" : "gih_w";
+    // "played" = games where the log shows you with the card, counted once per game
+    // however often it was cast; MTGO never names draws or hand, so it is not GIH
     const cols = [
       ["name", "Card", (c) => c.name, (c) => c.name.toLowerCase()],
       ["picked", "Drafts picked", (c) => String(c.picked), (c) => c.picked],
-      ["with", "With matches", (c) => String(c.drafts_with_matches), (c) => c.drafts_with_matches],
-      ["pick_wr", "Record when picked", (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : "", (c) => c.pick_w + c.pick_l ? c.pick_w / (c.pick_w + c.pick_l) : -1, (c) => pct(c.pick_w, c.pick_w + c.pick_l)],
-      ["trophies", "Trophies", (c) => c.drafts_with_matches ? `${c.trophies} / ${c.drafts_with_matches}` : "", (c) => c.drafts_with_matches ? c.trophies / c.drafts_with_matches : -1, (c) => pct(c.trophies, c.drafts_with_matches)],
-      ["games", all ? "Games (all formats)" : "Games (cube)", (c) => String(c[gG]), (c) => c[gG]],
-      ["gih_wr", "GIH win rate", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
+      ["matches", "Matches when picked", (c) => String(c.pick_w + c.pick_l), (c) => c.pick_w + c.pick_l],
+      ["pick_wr", "Match WR when picked", (c) => c.pick_w + c.pick_l ? `${c.pick_w}-${c.pick_l}` : "", (c) => c.pick_w + c.pick_l ? c.pick_w / (c.pick_w + c.pick_l) : -1, (c) => pct(c.pick_w, c.pick_w + c.pick_l)],
+      ["trophies", "Trophies / drafts", (c) => c.drafts_with_matches ? `${c.trophies} / ${c.drafts_with_matches}` : "", (c) => c.drafts_with_matches ? c.trophies / c.drafts_with_matches : -1, (c) => pct(c.trophies, c.drafts_with_matches)],
+      ["games", all ? "Games played (all formats)" : "Games played (cube)", (c) => String(c[gG]), (c) => c[gG]],
+      ["played_wr", "Game WR when played", (c) => c[gG] ? `${c[gW]}-${c[gG] - c[gW]}` : "", (c) => c[gG] ? c[gW] / c[gG] : -1, (c) => pct(c[gW], c[gG])],
     ];
     const sort = prefs.statsSort || { key: "picked", dir: -1 };
     for (const [key, label] of cols) {
