@@ -11,7 +11,7 @@
   let lastState = null, cards = {}, ratings = {}, lastMeta = null, lastCommitted = -1;
 
   // ------------------------------------------------------------ prefs
-  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle", statsScope: "cube", statsSort: { key: "games", dir: -1 }, statsMin: 3 };
+  const prefs = { showRatings: true, topPlayers: false, latestEvent: false, picksOpen: false, olderOpen: false, deckMode: "deck", tallyMulti: true, tallyLands: true, podLayout: "circle", statsScope: "cube", statsSort: { key: "games", dir: -1 }, statsMin: 3, showMine: true };
   try { Object.assign(prefs, JSON.parse(localStorage.getItem("draftPrefs") || "{}")); } catch (e) { /* ignore */ }
   function savePrefs() { try { localStorage.setItem("draftPrefs", JSON.stringify(prefs)); } catch (e) { /* ignore */ } }
 
@@ -69,6 +69,40 @@
     return b;
   }
 
+  // your own history for a card (from /api/history, loaded once; see loadHistory)
+  let mineByName = null;                           // name -> card stats row, null until the history has loaded
+  const mineOf = (name) => mineByName ? mineByName.get(name) || null : null;
+  const mineAvg = () => (hist && hist.totals && hist.totals.cube) || null;
+  function mineLines(name) {
+    if (!mineByName) return [];
+    const c = mineOf(name), t = mineAvg();
+    if (!c || !(c.played || c.cube_g)) return ["you have not played it"];
+    const out = [];
+    const m = c.play_w + c.play_l;
+    if (c.played) {
+      const avgM = t && t.m_w + t.m_l ? ` (you average ${pct(t.m_w, t.m_w + t.m_l)})` : "";
+      out.push(`you: ${c.played} deck${c.played === 1 ? "" : "s"} · matches ${c.play_w}-${c.play_l}${m ? " " + pct(c.play_w, m) : ""}${avgM}`);
+      const avgT = t && t.decks ? ` (you average ${pct(t.trophies, t.decks)})` : "";
+      out.push(`trophies ${c.play_trophies} / ${c.played}${c.played ? " " + pct(c.play_trophies, c.played) : ""}${avgT}`);
+    }
+    if (c.cube_g) {
+      const avgG = t && t.g ? ` (you average ${pct(t.g_w, t.g)})` : "";
+      out.push(`games you played it ${c.cube_g} · won ${pct(c.cube_w, c.cube_g)}${avgG}`);
+    }
+    return out;
+  }
+  function mineBadge(name) {
+    if (!prefs.showMine) return null;
+    const c = mineOf(name); if (!c || !c.played) return null;
+    const m = c.play_w + c.play_l, t = mineAvg();
+    const wr = m ? c.play_w / m : null, avg = t && t.m_w + t.m_l ? t.m_w / (t.m_w + t.m_l) : null;
+    const tone = wr == null || avg == null ? "" : wr > avg ? " m-up" : wr < avg ? " m-down" : "";
+    const b = el("div", "mine" + tone, m ? pct(c.play_w, m) : "–");
+    b.appendChild(el("span", "d", ` ${c.played}`));
+    b.title = mineLines(name).join("\n");
+    return b;
+  }
+
   // ------------------------------------------------------------ card cells
   // size: "lg" for the pack on screen, "" (66px) elsewhere
   function tile(name, size, extra) {
@@ -86,6 +120,7 @@
       t.appendChild(img);
     } else showName();
     const b = ratingBadge(name); if (b) t.appendChild(b);
+    const mb = mineBadge(name); if (mb) t.appendChild(mb);
     return t;
   }
   function chip(name, cls, text) {
@@ -129,7 +164,7 @@
     const cb = $(id); cb.checked = prefs[key];
     cb.addEventListener("change", () => { prefs[key] = cb.checked; savePrefs(); render(lastState); });
   }
-  bindOpt("opt-badges", "showRatings"); bindOpt("opt-top", "topPlayers"); bindOpt("opt-latest", "latestEvent");
+  bindOpt("opt-badges", "showRatings"); bindOpt("opt-top", "topPlayers"); bindOpt("opt-latest", "latestEvent"); bindOpt("opt-mine", "showMine");
   bindOpt("opt-multi", "tallyMulti"); bindOpt("opt-lands", "tallyLands");
 
   function renderRatings(st) {
@@ -613,7 +648,9 @@
     histLoading = true;
     fetch("/api/history").then((r) => r.json()).then((h) => {
       hist = h; histVersion = lastState ? lastState.history_version : histVersion; histLoading = false;
+      mineByName = h.status === "ready" || (h.cards && h.cards.length) ? new Map(h.cards.map((c) => [c.name, c])) : null;
       if (location.hash === "#stats") renderStats();
+      else if (lastState) render(lastState);        // badges and hover lines on the draft and deck views
       if (h.status === "scanning") setTimeout(() => loadHistory(true), 2000);
     }).catch((e) => { console.error("history:", e); histLoading = false; });
   }
@@ -728,7 +765,9 @@
     const hasDeck = !!(st.arena_game && (st.arena_game.deck || st.arena_game.game));
     if (location.hash === "#deck" && !hasDeck) { history.replaceState(null, "", location.pathname); route(); return; }
     renderHeader(st); renderRatings(st); updateLogDir(st);
-    if (location.hash === "#stats") { if (st.history_version !== histVersion) loadHistory(false); return; }
+    // your own card history feeds badges and hover lines everywhere; fetch it once and after each change
+    if (st.history_version !== histVersion && st.history_version) loadHistory(false);
+    if (location.hash === "#stats") return;
     if (location.hash === "#deck") { renderDeck(st); return; }
     renderCurrent(st); renderPod(st); renderPicks(st); renderWheels(st); renderPool(st);
   }
@@ -752,6 +791,7 @@
     if (i && i.type_line) inf.appendChild(el("div", "ty", i.type_line + (i.mana_cost ? "  " + i.mana_cost : "")));
     const lines = ratingLines(name); if (!lines.length) lines.push("no 17Lands data");
     for (const l of lines) inf.appendChild(el("div", "l", l));
+    for (const l of mineLines(name)) inf.appendChild(el("div", "l me", l));
     preview.appendChild(inf); preview.hidden = false;
   }
   function showPack(u) {

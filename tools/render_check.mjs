@@ -60,6 +60,9 @@ try {
     up: document.querySelectorAll('.wr.up').length, down: document.querySelectorAll('.wr.down').length,
     decks: document.querySelectorAll('.drafts-row').length,
     seats: [...document.querySelectorAll('.seat .who')].map((e) => e.textContent),
+    mine: { badges: document.querySelectorAll('.mine').length, up: document.querySelectorAll('.mine.m-up').length, down: document.querySelectorAll('.mine.m-down').length,
+      sample: [...document.querySelectorAll('.tile')].filter((t) => t.querySelector('.mine')).slice(0, 3)
+        .map((t) => t.dataset.card + ' => ' + t.querySelector('.mine').textContent + ' | ' + t.querySelector('.mine').title.split('\\n').join(' / ')) },
   }, null, 1)`);
   console.log(report);
   if (logs.length) console.log("console:\n" + logs.join("\n"));
