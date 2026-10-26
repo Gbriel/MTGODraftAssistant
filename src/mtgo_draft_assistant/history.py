@@ -506,6 +506,7 @@ class History:
         self.version = 0
         self.error: str | None = None
         self._snapshot: dict | None = None
+        self._matches: list[MatchSummary] = []     # the summaries behind the snapshot, for head-to-head
         self._lock = threading.Lock()
         self._pending = False
         self._thread: threading.Thread | None = None
@@ -516,6 +517,7 @@ class History:
 
     def refresh(self) -> dict:
         """Scan and recompute now (blocking). Safe to call from any thread."""
+        matches: list[MatchSummary] = []
         try:
             matches = self.index.scan()
             drafts = scan_drafts(self.log_dir)
@@ -530,6 +532,8 @@ class History:
         snap["error"] = self.error
         with self._lock:
             self._snapshot = snap
+            if snap["status"] == "ready":
+                self._matches = matches
             self.version += 1
         if self.on_change is not None:
             self.on_change()
@@ -577,6 +581,34 @@ class History:
         with self._lock:
             opp = (self._snapshot or {}).get("opponents", {})
             return {n: opp[n] for n in names if n in opp}
+
+    def head_to_head(self, name: str, exclude: str | None = None, limit: int = 10) -> dict | None:
+        """
+        Everything you have played against ``name``: the match record and the
+        most recent meetings, newest first. ``exclude`` drops the match on
+        screen (MTGO writes its log live, so it is already in the index).
+        None until the first scan has finished; an empty list of matches means
+        you have never met them.
+        """
+        with self._lock:
+            snap = self._snapshot
+            matches = list(self._matches)
+        if snap is None or snap.get("status") != "ready":
+            return None
+        hero = snap.get("hero")
+        met = [m for m in matches
+               if hero and name != hero and len(m.players) == 2 and hero in m.players and name in m.players
+               and m.match_id != exclude]
+        met.sort(key=lambda m: m.started_at or "", reverse=True)
+        results = [_result(m, hero) for m in met]
+        return {
+            "name": name,
+            "w": results.count("W"),
+            "l": results.count("L"),
+            "unfinished": results.count(None),
+            "matches": [{"started_at": m.started_at, "result": r, "score": m.score}
+                        for m, r in zip(met[:limit], results[:limit])],
+        }
 
     def close(self) -> None:
         self.index.close()

@@ -53,6 +53,10 @@ button.link:hover { color: #dcc5f5; }
 .sec-head .note { font: 12px var(--mono); color: var(--muted); }
 .sec-head .hint { font-size: 12.5px; color: var(--muted); }
 .sec-head .right { margin-left: auto; }
+/* head-to-head line under the opponent heading: first meeting, or the record and the last matches */
+.h2h { margin: 4px 0 8px; font-size: 13px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.h2h .pill { font-size: 12px; }
+.h2h .meet { font: 12px var(--mono); }
 .sec-head button.toggle { all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 12px; }
 .sec-head button.toggle h2::before { content: "▸ "; }
 .sec.open .sec-head button.toggle h2::before { content: "▾ "; }

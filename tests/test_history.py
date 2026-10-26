@@ -179,6 +179,17 @@ def test_history_object_refreshes_and_answers_records(tmp_path):
     assert snap["status"] == "ready" and snap["error"] is None and h.version == 1
     assert h.records_for(["jojo_lefou", "nobody", HERO]) == {"jojo_lefou": [1, 0]}
     assert h.snapshot()["cards"] and h.snapshot()["version"] == 1
+    # head-to-head: the record plus the meetings, newest first, from your side
+    hh = h.head_to_head("jojo_lefou")
+    assert (hh["w"], hh["l"], hh["unfinished"]) == (1, 0, 0)
+    assert hh["matches"] == [{"started_at": "2026-09-22T10:07:17", "result": "W", "score": "2-1"}]
+    # someone never met is an answer too (an empty list), unlike "not scanned yet"
+    assert h.head_to_head("nobody") == {"name": "nobody", "w": 0, "l": 0, "unfinished": 0, "matches": []}
+    # the match on screen is already in the index (MTGO writes the log live): leave it out
+    mid = M.match_id_of(MATCH)
+    assert h.head_to_head("jojo_lefou", exclude=mid)["matches"] == []
+    assert h.head_to_head(HERO)["matches"] == []
+    assert History(logs, tmp_path / "cache2").head_to_head("jojo_lefou") is None    # not scanned yet
     # background refresh coalesces and bumps the version
     h.request_refresh()
     h.wait(10)

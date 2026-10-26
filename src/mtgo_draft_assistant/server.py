@@ -503,7 +503,9 @@ class DraftServer:
             str(self.watcher.log_path) if self.arena else None)
         state["sources"] = self._sources()
         state["history_version"] = self.history.version if self.history is not None else 0
+        state["history_status"] = self.history.snapshot()["status"] if self.history is not None else "disabled"
         state.setdefault("records", {})
+        state.setdefault("head_to_head", None)
         return state
 
     def _active_source(self, update: Update) -> str:
@@ -811,6 +813,10 @@ class DraftServer:
         if game.get("opponent"):
             names.append(game["opponent"])
         state["records"] = self.history.records_for(names) if self.history is not None else {}
+        # the current opponent in full: record plus the last meetings, or "never met";
+        # None while the history is still scanning so the page does not claim either
+        state["head_to_head"] = (self.history.head_to_head(game["opponent"], exclude=game.get("match_id"))
+                                 if self.history is not None and game.get("opponent") else None)
         self.store.set(self._decorate(state, source))
 
     def _publish_idle(self) -> None:

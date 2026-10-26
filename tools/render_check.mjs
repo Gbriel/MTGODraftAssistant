@@ -60,6 +60,8 @@ try {
     up: document.querySelectorAll('.wr.up').length, down: document.querySelectorAll('.wr.down').length,
     decks: document.querySelectorAll('.drafts-row').length,
     seats: [...document.querySelectorAll('.seat .who')].map((e) => e.textContent),
+    opponent: (document.getElementById('opp-title') || {}).textContent,
+    head_to_head: (document.getElementById('opp-h2h') || {}).innerText,
     mine: { badges: document.querySelectorAll('.mine').length, up: document.querySelectorAll('.mine.m-up').length, down: document.querySelectorAll('.mine.m-down').length,
       sample: [...document.querySelectorAll('.tile')].filter((t) => t.querySelector('.mine')).slice(0, 3)
         .map((t) => t.dataset.card + ' => ' + t.querySelector('.mine').textContent + ' | ' + t.querySelector('.mine').title.split('\\n').join(' / ')) },

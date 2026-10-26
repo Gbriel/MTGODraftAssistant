@@ -668,6 +668,18 @@ def test_history_endpoint_and_opponent_records(tmp_path, monkeypatch):
         st = _wait_state(s, lambda st: (st.get("records") or {}).get("jojo_lefou"))
         assert st["records"] == {"jojo_lefou": [1, 0]} and st["history_version"] >= 1
         assert st["arena_game"]["game"]["opponent"] == "jojo_lefou"
+        # the head-to-head leaves out the match on screen, which is the only one in the index
+        assert st["history_status"] == "ready"
+        assert st["head_to_head"] == {"name": "jojo_lefou", "w": 0, "l": 0, "unfinished": 0, "matches": []}
+        # an earlier match against the same player (a copy under another id) counts
+        m0 = mdir / "Match_GameLog_00000000-0000-0000-0000-000000000000.dat"
+        shutil.copyfile(MTGO_MATCH, m0)
+        os.utime(m0, (draft_start - 86400, draft_start - 86400))
+        hist.request_refresh()
+        hist.wait(10)
+        st = _wait_state(s, lambda st: (st.get("head_to_head") or {}).get("w"))
+        assert st["head_to_head"]["w"] == 1 and st["head_to_head"]["matches"][0]["score"] == "2-1"
+        assert st["records"] == {"jojo_lefou": [2, 0]}
     finally:
         s.stop()
 

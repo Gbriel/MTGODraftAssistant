@@ -618,6 +618,7 @@
     }
     if (g) {
       $("opp-title").textContent = `${g.opponent ? g.opponent + recordSuffix(st, g.opponent) : "Opponent"} has shown`;
+      renderHeadToHead(st, g.opponent);
       const box = $("opp-cards"); clear(box);
       // MTGO: the whole match, each card tagged with how it was last seen (not its zone: MTGO
       // never logs a permanent leaving the battlefield). Arena: this game's seen list.
@@ -637,6 +638,34 @@
       }
     }
     $("deck-foot").textContent = dk ? `${mtgo ? "MTGO" : "Arena"} · ${dk.source || "deck"} · ${(dk.submitted_at || "").replace("T", " ")}${dk.event ? " · " + dk.event : ""}` : "";
+  }
+
+  // the log's score is the winner's; show it from your side
+  const scoreMine = (o) => { const m = /^(\d+)-(\d+)$/.exec(o.score || ""); return !m ? (o.score || "") : o.result === "L" ? `${m[2]}-${m[1]}` : o.score; };
+  const fmtDay = (iso) => { if (!iso) return "?"; const d = new Date(iso); const sameYear = d.getFullYear() === new Date().getFullYear(); return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" }); };
+
+  // Under the opponent heading: have you met before, and how did it go. Always says
+  // something once the match logs are scanned, so "first time" is a statement, not an absence.
+  function renderHeadToHead(st, opponent) {
+    const box = $("opp-h2h"); clear(box);
+    box.hidden = !opponent;
+    if (!opponent) return;
+    const hh = st.head_to_head && st.head_to_head.name === opponent ? st.head_to_head : null;
+    if (!hh) {
+      const status = st.history_status;
+      if (status === "disabled") { box.hidden = true; return; }
+      box.appendChild(el("span", "muted", status === "error" ? "Match history unavailable (see Card stats)" : "Checking the match logs for earlier matches…"));
+      return;
+    }
+    const n = hh.w + hh.l + hh.unfinished;
+    if (!n) {
+      box.appendChild(el("span", "pill waiting", "first meeting"));
+      box.appendChild(el("span", null, `You had not played ${opponent} before this match.`));
+      return;
+    }
+    box.appendChild(el("span", "pill " + (hh.w > hh.l ? "up" : hh.w < hh.l ? "down" : "waiting"), `${hh.w}–${hh.l} before this match`));
+    box.appendChild(el("span", null, `Played ${n} time${n === 1 ? "" : "s"} before${hh.unfinished ? ` (${hh.unfinished} unfinished)` : ""} · last:`));
+    for (const m of hh.matches.slice(0, 4)) box.appendChild(el("span", "meet", `${fmtDay(m.started_at)} ${m.result === "W" ? "won" : m.result === "L" ? "lost" : "unfinished"}${m.score ? " " + scoreMine(m) : ""}`));
   }
 
   // ------------------------------------------------------------ personal card stats
@@ -736,9 +765,7 @@
       row.appendChild(el("span", "src", d.source === "draft" ? "draft log" : "inferred"));
       row.appendChild(el("span", "rec" + (d.trophy ? " trophy" : ""), `${d.w}-${d.l}${d.trophy ? " 🏆" : ""}`));
       const opps = el("span", "opps");
-      // the log's score is the winner's; show it from your side
-      const mine = (o) => { const m = /^(\d+)-(\d+)$/.exec(o.score || ""); return !m ? (o.score || "") : o.result === "L" ? `${m[2]}-${m[1]}` : o.score; };
-      d.opponents.forEach((o, i) => { if (i) opps.appendChild(document.createTextNode(" · ")); const b = el("b", null, o.name); opps.appendChild(b); opps.appendChild(document.createTextNode(` ${o.result || "unfinished"}${o.score ? " " + mine(o) : ""}`)); });
+      d.opponents.forEach((o, i) => { if (i) opps.appendChild(document.createTextNode(" · ")); const b = el("b", null, o.name); opps.appendChild(b); opps.appendChild(document.createTextNode(` ${o.result || "unfinished"}${o.score ? " " + scoreMine(o) : ""}`)); });
       row.appendChild(opps); list.appendChild(row);
     }
   }

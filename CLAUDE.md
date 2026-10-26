@@ -139,7 +139,7 @@ python -m mtgo_draft_assistant --log-dir C:\some\empty\dir
   Deck pane serves both clients through one state (`arena_game`, with
   `client`), and sideboarding is recorded by drag-and-drop on the page via
   `POST /api/deck`, kept per match and reset when the match changes.
-  Whether MTGO writes the match log live or at match end is unverified.
+  MTGO writes the match log live (verified 2026-10-26, DESIGN.md §2.3).
 - **M5 done** — `history.py`: every `Match_GameLog_*.dat` on the machine
   summarised once and cached in `data/cache/history.sqlite` (first scan of
   ~2,500 logs ≈ 10 s in the background, then milliseconds), deduplicated by

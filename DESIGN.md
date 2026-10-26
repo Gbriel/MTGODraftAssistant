@@ -120,8 +120,10 @@ Picked: Broadside Bombardiers
   casts / discards / reveals / activates an ability of [card]`, `X puts a
   triggered ability from [card] onto the stack`, `X wins the game.`, `X has
   conceded`, `X wins the match 2-1`. **No life totals, no draws by name, no
-  hand, no library, no deck registration, no sideboarding.** Whether the
-  file is written during the match or at its end is still unverified.
+  hand, no library, no deck registration, no sideboarding.** **Written live**
+  (verified 2026-10-26 on the six newest logs): the file's creation time is
+  two seconds before its first record and its mtime matches its last record,
+  so the opponent's name and the cards shown are available during the match.
 - **Nothing logs a permanent leaving the battlefield** (measured 2026-10-11
   over all 2,521 logs on this machine): no "dies", "is destroyed", damage or
   combat-death line exists. `X puts [card] into their graveyard` is surveil
